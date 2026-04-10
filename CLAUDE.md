@@ -1,6 +1,6 @@
-# CLAUDE.md - gamut-volume-py
+# CLAUDE.md - cielab-gamut-tools-py
 
-Python implementation of gamut volume calculation for color displays. This is a port of the MATLAB library [gamut-volume-m](https://github.com/CIELab-gamut-tools/gamut-volume-m).
+Python implementation of gamut volume calculation for color displays. This is a port of the MATLAB library [cielab-gamut-tools-m](https://github.com/CIELab-gamut-tools/cielab-gamut-tools-m).
 
 **IMPORTANT:** This code must produce results identical to the MATLAB reference (within numerical precision). The MATLAB code is incorporated into IEC and ICDM standards. Always match the MATLAB algorithm exactly.
 
@@ -26,7 +26,7 @@ Python implementation of gamut volume calculation for color displays. This is a 
 ## Architecture
 
 ```
-src/gamut_volume/
+src/cielab_gamut_tools/
 ├── __init__.py           # Public API: Gamut, SyntheticGamut
 ├── gamut.py              # Gamut class - main entry point
 ├── synthetic.py          # SyntheticGamut factory for reference gamuts
@@ -101,7 +101,7 @@ Uses Bradford transform. Source white comes from the gamut's white point (e.g., 
 ## Public API
 
 ```python
-from gamut_volume import Gamut, SyntheticGamut
+from cielab_gamut_tools import Gamut, SyntheticGamut
 
 # Reference gamuts (WORKING)
 srgb = SyntheticGamut.srgb()
@@ -155,7 +155,7 @@ The plotting code is written but untested. May need fixes.
 
 ### Setup
 ```bash
-cd gamut-volume-py
+cd cielab-gamut-tools-py
 python -m venv .venv
 source .venv/bin/activate  # or .venv\Scripts\activate on Windows
 pip install -e ".[dev]"
@@ -164,20 +164,20 @@ pip install -e ".[dev]"
 ### Commands
 ```bash
 pytest                    # Run tests
-pytest --cov=gamut_volume # With coverage
+pytest --cov=cielab_gamut_tools # With coverage
 mypy src                  # Type checking
 ruff check src tests      # Linting
 ```
 
 ### Quick Test
 ```python
-from gamut_volume import SyntheticGamut
+from cielab_gamut_tools import SyntheticGamut
 print(SyntheticGamut.srgb().volume())  # Should be ~830,330
 ```
 
 ## Reference Material
 
-- **MATLAB implementation:** `../gamut-volume-m/`
+- **MATLAB implementation:** `../cielab-gamut-tools-m/`
 - **Key MATLAB files:**
   - `SyntheticGamut.m` - Synthetic gamut creation
   - `CIELabGamut.m` - Gamut from measurements
@@ -205,6 +205,6 @@ Extensive unit testing is a primary goal (improving on limited MATLAB testing).
 ## Package Configuration
 
 - **Python:** ≥3.10
-- **Package name:** `gamut-volume` (PyPI), import as `gamut_volume`
+- **Package name:** `cielab-gamut-tools` (PyPI), import as `cielab_gamut_tools`
 - **Build system:** hatchling with pyproject.toml
 - **Layout:** src layout

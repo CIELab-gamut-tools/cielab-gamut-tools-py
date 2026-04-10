@@ -7,8 +7,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from gamut_volume.gamut import Gamut
-from gamut_volume.synthetic import SyntheticGamut
+from cielab_gamut_tools.gamut import Gamut
+from cielab_gamut_tools.synthetic import SyntheticGamut
 
 
 SAMPLES_DIR = Path(__file__).parent / "data"
@@ -47,7 +47,7 @@ class TestSyntheticGamut:
 
     def test_srgb_primaries(self):
         """sRGB should have correct primaries."""
-        from gamut_volume.synthetic import SRGB_PRIMARIES, D65_WHITE
+        from cielab_gamut_tools.synthetic import SRGB_PRIMARIES, D65_WHITE
 
         srgb = SyntheticGamut.srgb()
 
@@ -57,7 +57,7 @@ class TestSyntheticGamut:
 
     def test_bt2020_primaries(self):
         """BT.2020 should have correct primaries."""
-        from gamut_volume.synthetic import BT2020_PRIMARIES, D65_WHITE
+        from cielab_gamut_tools.synthetic import BT2020_PRIMARIES, D65_WHITE
 
         bt2020 = SyntheticGamut.bt2020()
 
@@ -67,7 +67,7 @@ class TestSyntheticGamut:
 
     def test_dci_p3_primaries(self):
         """DCI-P3 should have correct primaries and white."""
-        from gamut_volume.synthetic import DCI_P3_PRIMARIES, DCI_WHITE
+        from cielab_gamut_tools.synthetic import DCI_P3_PRIMARIES, DCI_WHITE
 
         dci_p3 = SyntheticGamut.dci_p3()
 
@@ -77,7 +77,7 @@ class TestSyntheticGamut:
 
     def test_display_p3_primaries(self):
         """Display P3 should have P3 primaries with D65 white."""
-        from gamut_volume.synthetic import DCI_P3_PRIMARIES, D65_WHITE
+        from cielab_gamut_tools.synthetic import DCI_P3_PRIMARIES, D65_WHITE
 
         display_p3 = SyntheticGamut.display_p3()
 

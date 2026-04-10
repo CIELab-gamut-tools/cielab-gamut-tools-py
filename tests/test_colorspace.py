@@ -5,14 +5,14 @@ Tests for colorspace conversion functions.
 import numpy as np
 import pytest
 
-from gamut_volume.colorspace.lab import (
+from cielab_gamut_tools.colorspace.lab import (
     D50_WHITE_XYZ,
     lab_to_xyz,
     xy_to_XYZ,
     xyz_to_lab,
 )
-from gamut_volume.colorspace.adaptation import adapt_d65_to_d50, chromatic_adaptation
-from gamut_volume.colorspace.srgb import srgb_gamma_decode, srgb_gamma_encode
+from cielab_gamut_tools.colorspace.adaptation import adapt_d65_to_d50, chromatic_adaptation
+from cielab_gamut_tools.colorspace.srgb import srgb_gamma_decode, srgb_gamma_encode
 
 
 class TestXyzToLab:
@@ -103,7 +103,7 @@ class TestChromaticAdaptation:
 
     def test_d65_to_d50_white(self):
         """D65 white adapted to D50 should give D50 white."""
-        from gamut_volume.colorspace.adaptation import D65_XY, D50_XY
+        from cielab_gamut_tools.colorspace.adaptation import D65_XY, D50_XY
 
         d65_xyz = xy_to_XYZ(D65_XY)
         d50_xyz = adapt_d65_to_d50(d65_xyz)
@@ -112,7 +112,7 @@ class TestChromaticAdaptation:
 
     def test_identity_adaptation(self):
         """Adapting from an illuminant to itself should be identity."""
-        from gamut_volume.colorspace.adaptation import D65_XY
+        from cielab_gamut_tools.colorspace.adaptation import D65_XY
 
         xyz = np.array([0.5, 0.5, 0.5])
         adapted = chromatic_adaptation(xyz, D65_XY, D65_XY)

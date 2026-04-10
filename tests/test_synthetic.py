@@ -5,7 +5,7 @@ Tests for synthetic gamut generation.
 import numpy as np
 import pytest
 
-from gamut_volume.synthetic import (
+from cielab_gamut_tools.synthetic import (
     SyntheticGamut,
     _build_rgb_to_xyz_matrix,
     SRGB_PRIMARIES,
@@ -18,7 +18,7 @@ class TestRgbToXyzMatrix:
 
     def test_white_maps_to_white(self):
         """RGB white (1,1,1) should map to the white point XYZ."""
-        from gamut_volume.colorspace.lab import xy_to_XYZ
+        from cielab_gamut_tools.colorspace.lab import xy_to_XYZ
 
         M = _build_rgb_to_xyz_matrix(SRGB_PRIMARIES, D65_WHITE)
         rgb_white = np.array([1.0, 1.0, 1.0])
@@ -38,7 +38,7 @@ class TestRgbToXyzMatrix:
 
     def test_red_primary(self):
         """RGB red (1,0,0) should map to red primary XYZ."""
-        from gamut_volume.colorspace.lab import xy_to_XYZ
+        from cielab_gamut_tools.colorspace.lab import xy_to_XYZ
 
         M = _build_rgb_to_xyz_matrix(SRGB_PRIMARIES, D65_WHITE)
         rgb_red = np.array([1.0, 0.0, 0.0])

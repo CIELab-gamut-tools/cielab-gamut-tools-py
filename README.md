@@ -1,6 +1,6 @@
-# gamut-volume
+# cielab-gamut-tools
 
-Calculate and visualize CIELab gamut volumes of color displays.
+Calculate and visualize CIELab colour gamuts of displays.
 
 This is a Python port of the [gamut-volume-m](https://github.com/CIELab-gamut-tools/gamut-volume-m) MATLAB library.
 
@@ -16,21 +16,21 @@ This is a Python port of the [gamut-volume-m](https://github.com/CIELab-gamut-to
 ## Installation
 
 ```bash
-pip install gamut-volume
+pip install cielab-gamut-tools
 ```
 
 Or install from source:
 
 ```bash
-git clone https://github.com/CIELab-gamut-tools/gamut-volume-py.git
-cd gamut-volume-py
+git clone https://github.com/CIELab-gamut-tools/cielab-gamut-tools-py.git
+cd cielab-gamut-tools-py
 pip install -e .
 ```
 
 ## Quick Start
 
 ```python
-from gamut_volume import Gamut, SyntheticGamut
+from cielab_gamut_tools import Gamut, SyntheticGamut
 
 # Load measured display gamut from CGATS file
 display = Gamut.from_cgats("measurements.txt")
@@ -77,15 +77,15 @@ custom = SyntheticGamut(
 
 ```bash
 # Clone and install with dev dependencies
-git clone https://github.com/CIELab-gamut-tools/gamut-volume-py.git
-cd gamut-volume-py
+git clone https://github.com/CIELab-gamut-tools/cielab-gamut-tools-py.git
+cd cielab-gamut-tools-py
 pip install -e ".[dev]"
 
 # Run tests
 pytest
 
 # Run tests with coverage
-pytest --cov=gamut_volume --cov-report=term-missing
+pytest --cov=cielab_gamut_tools --cov-report=term-missing
 
 # Type checking
 mypy src

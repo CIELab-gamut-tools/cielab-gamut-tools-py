@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from gamut_volume.io.cgats import read_cgats
+from cielab_gamut_tools.io.cgats import read_cgats
 
 
 SAMPLES_DIR = Path(__file__).parent / "data"

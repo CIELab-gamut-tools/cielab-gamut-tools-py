@@ -5,7 +5,7 @@ Tests for geometry functions (tesselation and volume calculation).
 import numpy as np
 import pytest
 
-from gamut_volume.geometry.tesselation import make_tesselation
+from cielab_gamut_tools.geometry.tesselation import make_tesselation
 
 
 class TestMakeTesselation:
