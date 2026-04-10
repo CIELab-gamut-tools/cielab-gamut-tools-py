@@ -168,23 +168,27 @@ class Gamut:
     def plot_rings(
         self,
         reference: Gamut | SyntheticGamut | None = None,
-        l_values: list[float] | None = None,
+        l_rings: list[float] | None = None,
         ax: Axes | None = None,
     ) -> Figure:
         """
-        Create a 2D gamut rings plot showing chroma at different L* levels.
+        Create a 2D gamut rings plot in the a*-b* plane.
+
+        Each ring's radius encodes the cumulative gamut volume up to that L*
+        level, so the area enclosed equals the cumulative volume.
 
         Args:
-            reference: Optional reference gamut to overlay.
-            l_values: L* values for rings (default: [25, 50, 75]).
-            ax: Optional matplotlib axes to plot on.
+            reference: Optional reference gamut (outer ring shown dashed).
+            l_rings: Inner ring L* values (default: 10, 20, ..., 90).
+                     The outer ring at L*=100 is always included.
+            ax: Optional matplotlib Cartesian axes to plot on.
 
         Returns:
             The matplotlib Figure containing the plot.
         """
         from cielab_gamut_tools.plotting.rings import plot_rings
 
-        return plot_rings(self, reference=reference, l_values=l_values, ax=ax)
+        return plot_rings(self, reference=reference, l_rings=l_rings, ax=ax)
 
 
 def _interpolate_xyz(

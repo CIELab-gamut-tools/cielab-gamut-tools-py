@@ -1,8 +1,12 @@
 """
 2D gamut rings visualization.
 
-Shows gamut boundaries at different L* (lightness) levels as polar plots,
-which is useful for comparing gamut coverage at different lightness values.
+Each ring corresponds to an L* level. The radius at each hue angle is
+computed so that the area enclosed by the ring equals the cumulative gamut
+volume up to that L* level. The plot is in Cartesian (a*, b*) coordinates.
+
+Algorithm matches calcGamutRings.m / PlotRings.m from gamut-volume-m (MATLAB
+reference implementation for IEC/ICDM standards).
 """
 
 from __future__ import annotations
@@ -21,122 +25,163 @@ if TYPE_CHECKING:
 def plot_rings(
     gamut: "Gamut",
     reference: "Gamut | None" = None,
-    l_values: list[float] | None = None,
+    l_rings: list[float] | None = None,
     ax: "Axes | None" = None,
-    show_legend: bool = True,
 ) -> "Figure":
     """
-    Create a 2D polar plot showing gamut boundaries at different L* levels.
+    Create a 2D gamut rings plot in the a*-b* plane.
+
+    Each ring corresponds to an L* lightness level. The radius at each hue
+    angle encodes the cumulative gamut volume up to that L* level, such that
+    the area enclosed by the ring equals the cumulative volume. This matches
+    the MATLAB PlotRings/calcGamutRings algorithm.
 
     Args:
         gamut: The gamut to plot.
-        reference: Optional reference gamut to overlay (e.g., sRGB).
-        l_values: L* values for rings (default [25, 50, 75]).
-        ax: Optional matplotlib polar axes. If None, a new figure is created.
-        show_legend: Whether to show the legend.
+        reference: Optional reference gamut — only the outer (L*=100) ring is
+                   shown, as a dashed line.
+        l_rings: Inner ring L* values (default: 10, 20, ..., 90). The outer
+                 ring at L*=100 is always included.
+        ax: Optional matplotlib Cartesian axes. If None, a new figure is
+            created.
 
     Returns:
         The matplotlib Figure containing the plot.
     """
     import matplotlib.pyplot as plt
 
-    if l_values is None:
-        l_values = [25.0, 50.0, 75.0]
+    if l_rings is None:
+        l_rings = list(np.arange(10, 100, 10))  # 10:10:90
 
-    # Create figure if needed
     if ax is None:
-        fig, ax = plt.subplots(subplot_kw={"projection": "polar"}, figsize=(8, 8))
+        fig, ax = plt.subplots(figsize=(8, 8))
     else:
         fig = ax.get_figure()
 
-    # Colors for different L* values
-    colors = plt.cm.viridis(np.linspace(0.2, 0.8, len(l_values)))
+    ax.set_aspect("equal")
+    ax.set_box_aspect(1)
+    ax.axhline(0, color="lightgray", linewidth=0.5, zorder=0)
+    ax.axvline(0, color="lightgray", linewidth=0.5, zorder=0)
 
-    # Plot gamut rings
-    for l_val, color in zip(l_values, colors):
-        h, c = _extract_ring(gamut, l_val)
-        if len(h) > 0:
-            # Close the ring
-            h = np.append(h, h[0])
-            c = np.append(c, c[0])
-            ax.plot(h, c, color=color, linewidth=2, label=f"L*={l_val:.0f}")
+    # Compute ring coordinates for the test gamut.
+    # rows: [L*=0, l_rings..., L*=100]; skip row 0 (point at origin)
+    x, y, vol = _calc_gamut_rings(gamut, l_rings)
+    for i in range(1, x.shape[0]):
+        xi = np.append(x[i], x[i, 0])
+        yi = np.append(y[i], y[i, 0])
+        ax.plot(xi, yi, "k-", linewidth=1.0)
 
-    # Plot reference rings if provided
+    # Reference gamut: only the outer (L*=100) ring, dashed
     if reference is not None:
-        # Get underlying Gamut if SyntheticGamut
         if hasattr(reference, "gamut"):
             reference = reference.gamut
+        ref_x, ref_y, _ = _calc_gamut_rings(reference, [])
+        xi = np.append(ref_x[-1], ref_x[-1, 0])
+        yi = np.append(ref_y[-1], ref_y[-1, 0])
+        ax.plot(xi, yi, "--k", linewidth=1.0)
 
-        for l_val, color in zip(l_values, colors):
-            h, c = _extract_ring(reference, l_val)
-            if len(h) > 0:
-                h = np.append(h, h[0])
-                c = np.append(c, c[0])
-                ax.plot(h, c, color=color, linewidth=1, linestyle="--", alpha=0.7)
+    # L* ring labels — default indices 0 and 4 (L*=10 and L*=50), matching
+    # MATLAB's LLabelIndices=[1,5] (1-indexed)
+    all_l = list(l_rings) + [100]
+    for li in [0, 4]:
+        if li < len(all_l):
+            row = li + 1  # +1 to skip L*=0 row
+            col = int(x.shape[1] * 15 // 16)
+            ax.text(
+                x[row, col], y[row, col],
+                f"L*={all_l[li]:.0f}",
+                fontsize=9, ha="center", va="center",
+            )
 
-    # Configure axes
-    ax.set_theta_zero_location("E")  # 0° at right (red)
-    ax.set_theta_direction(1)  # Counter-clockwise
-    ax.set_rlabel_position(45)
-    ax.set_ylabel("Chroma (C*)")
+    # Centre mark
+    ax.plot(0, 0, "+k", markersize=20, markeredgewidth=1.5)
 
-    if show_legend:
-        ax.legend(loc="upper right", bbox_to_anchor=(1.3, 1.0))
+    ax.set_xlabel("a*")
+    ax.set_ylabel("b*")
+    ax.set_title(f"CIELab gamut rings\nVolume = {vol:.0f}")
 
     plt.tight_layout()
     return fig
 
 
-def _extract_ring(
+def _calc_gamut_rings(
     gamut: "Gamut",
-    l_target: float,
+    l_rings: list[float],
+    l_steps: int = 100,
     h_steps: int = 360,
-    l_tolerance: float = 5.0,
-) -> tuple[np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray, float]:
     """
-    Extract the gamut boundary at a specific L* value.
+    Calculate ring x, y coordinates from the gamut cylindrical map.
+
+    Matches calcGamutRings.m from gamut-volume-m. For each hue angle, the
+    ring radius at a given L* level is chosen so that:
+        area = sum_h(r² * dH / 2) = cumulative gamut volume up to L*
 
     Args:
-        gamut: The gamut to extract from.
-        l_target: Target L* value.
-        h_steps: Number of hue angle samples.
-        l_tolerance: L* tolerance for including points.
+        gamut: Gamut object (may have pre-computed _cylindrical_map).
+        l_rings: Inner L* values for rings (without 0 or 100).
+        l_steps: Number of L* bins (default 100).
+        h_steps: Number of hue bins (default 360).
 
     Returns:
-        Tuple of (hue_angles, chroma_values) arrays.
+        x: (len(l_rings)+2, h_steps) — rows for L* = [0, l_rings..., 100]
+        y: same shape
+        vol: total gamut volume
     """
-    lab = gamut.lab
-    L = lab[:, 0]
-    a = lab[:, 1]
-    b = lab[:, 2]
+    from cielab_gamut_tools.geometry.volume import get_cylindrical_map
 
-    # Filter points near target L*
-    mask = np.abs(L - l_target) < l_tolerance
+    # get_cylindrical_map handles building and caching automatically
+    cylmap, counts = get_cylindrical_map(gamut, l_steps, h_steps)
+    l_steps = cylmap.shape[0]
+    h_steps = cylmap.shape[1]
 
-    if not np.any(mask):
-        return np.array([]), np.array([])
+    dH = 2 * np.pi / h_steps
+    dL = 100.0 / l_steps
 
-    a_sel = a[mask]
-    b_sel = b[mask]
+    # Volume contribution per (L*, hue) cell: sum(sign * t² * dL * dH / 2)
+    # cylmap shape: (l_steps, h_steps, _MAX_K, 2); counts: (l_steps, h_steps)
+    k_range = np.arange(cylmap.shape[2])
+    mask = k_range[None, None, :] < counts[:, :, None]  # (l_steps, h_steps, _MAX_K)
+    volmap = (
+        np.sum(cylmap[:, :, :, 0] * cylmap[:, :, :, 1] ** 2 * mask, axis=2)
+        * dL * dH / 2
+    )  # (l_steps, h_steps)
 
-    # Convert to polar
-    c_sel = np.sqrt(a_sel**2 + b_sel**2)
-    h_sel = np.arctan2(b_sel, a_sel)
-    h_sel = np.mod(h_sel, 2 * np.pi)
+    # Cumulative volume over L* (from dark L*=0 toward light L*=100)
+    cumvol = np.cumsum(volmap, axis=0)  # (l_steps, h_steps)
 
-    # Bin by hue and take maximum chroma in each bin
-    h_bins = np.linspace(0, 2 * np.pi, h_steps + 1)
-    h_centers = (h_bins[:-1] + h_bins[1:]) / 2
-    c_max = np.zeros(h_steps)
+    # Squared radius such that area of ring = cumulative volume:
+    #   sum_h(r² * dH / 2) = cumvol  →  r² = 2 * cumvol / dH
+    r2_full = 2.0 * cumvol / dH  # (l_steps, h_steps)
 
-    indices = np.digitize(h_sel, h_bins) - 1
-    indices = np.clip(indices, 0, h_steps - 1)
+    # L* grid for interpolation: [0, dL, 2*dL, ..., 100] (l_steps+1 values)
+    L_grid = np.linspace(0.0, 100.0, l_steps + 1)
 
-    for i in range(h_steps):
-        mask_bin = indices == i
-        if np.any(mask_bin):
-            c_max[i] = np.max(c_sel[mask_bin])
+    # r² at each grid point: row 0 = L*=0 (zero everywhere), rows 1..l_steps = r2_full
+    r2_grid = np.vstack([np.zeros((1, h_steps)), r2_full])  # (l_steps+1, h_steps)
 
-    # Remove empty bins
-    valid = c_max > 0
-    return h_centers[valid], c_max[valid]
+    # Query L* values: [0, l_rings..., 100]
+    L_query = np.concatenate([[0.0], l_rings, [100.0]])
+
+    # Vectorised linear interpolation along L* for all hues at once
+    idx = np.searchsorted(L_grid, L_query, side="right")
+    idx = np.clip(idx, 1, len(L_grid) - 1)
+    frac = (L_query - L_grid[idx - 1]) / (L_grid[idx] - L_grid[idx - 1])
+    frac = np.clip(frac, 0.0, 1.0)  # (n_query,)
+
+    r2_lo = r2_grid[idx - 1, :]     # (n_query, h_steps)
+    r2_hi = r2_grid[idx, :]
+    r2 = r2_lo + frac[:, np.newaxis] * (r2_hi - r2_lo)  # (n_query, h_steps)
+
+    r = np.sqrt(np.maximum(r2, 0.0))
+
+    # Unit direction vectors for each hue bin midpoint.
+    # Convention (matching MATLAB): sin→a* axis, cos→b* axis
+    midH = np.arange(dH / 2, 2 * np.pi, dH)  # (h_steps,)
+    ux = np.sin(midH)
+    uy = np.cos(midH)
+
+    x = r * ux  # (n_query, h_steps)
+    y = r * uy
+
+    return x, y, float(np.sum(volmap))
