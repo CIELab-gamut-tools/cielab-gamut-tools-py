@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xargs grep:*)",
+      "Bash(dir \"C:\\\\dev\\\\IDMS\\\\gamut-volume-py\\\\src\\\\cielab_gamut_tools\")",
+      "Bash(cmd /c \"dir C:\\\\dev\\\\IDMS\\\\gamut-volume-py\\\\src\\\\cielab_gamut_tools 2>&1\")",
+      "Bash(powershell -Command \"Get-ChildItem -Path ''C:\\\\dev\\\\IDMS\\\\gamut-volume-py\\\\src\\\\cielab_gamut_tools'',''C:\\\\dev\\\\IDMS\\\\gamut-volume-py\\\\tests'' -Filter ''*.py'' -Recurse | ForEach-Object { \\(Get-Content $_FullName\\) -replace ''gamut_volume'', ''cielab_gamut_tools'' | Set-Content $_FullName }; Write-Host ''Done''\")",
+      "Bash(powershell -Command \"Get-ChildItem -Path ''C:\\\\dev\\\\IDMS\\\\gamut-volume-py\\\\src\\\\cielab_gamut_tools'',''C:\\\\dev\\\\IDMS\\\\gamut-volume-py\\\\tests'' -Filter ''*.py'' -Recurse | ForEach-Object { \\(Get-Content $_FullName\\) -replace ''gamut_volume'', ''cielab_gamut_tools'' | Set-Content $_FullName }; ''Done''\")",
+      "Bash(powershell.exe -Command \"Get-ChildItem -Path ''C:\\\\dev\\\\IDMS\\\\gamut-volume-py\\\\src\\\\cielab_gamut_tools'',''C:\\\\dev\\\\IDMS\\\\gamut-volume-py\\\\tests'' -Filter ''*.py'' -Recurse | ForEach-Object { \\(Get-Content $_.FullName\\) -replace ''gamut_volume'', ''cielab_gamut_tools'' | Set-Content $_.FullName }; ''Done''\")",
+      "Bash(echo \"exit: $?\")",
+      "Bash(powershell.exe -Command \"\\(Get-Content ''C:\\\\dev\\\\IDMS\\\\gamut-volume-py\\\\CLAUDE.md''\\) -replace ''gamut_volume'', ''cielab_gamut_tools'' -replace ''gamut-volume'', ''cielab-gamut-tools'' | Set-Content ''C:\\\\dev\\\\IDMS\\\\gamut-volume-py\\\\CLAUDE.md''; ''Done''\")",
+      "Bash(.venv/Scripts/pip install:*)",
+      "Bash(.venv/Scripts/python -c \"from cielab_gamut_tools import SyntheticGamut; print\\(SyntheticGamut.srgb\\(\\).volume\\(\\)\\)\")",
+      "Bash(cmd /c \".venv\\\\Scripts\\\\python -c \"\"from cielab_gamut_tools import SyntheticGamut; print\\(SyntheticGamut.srgb\\(\\).volume\\(\\)\\)\"\" 2>&1\")",
+      "Bash(C:/dev/IDMS/gamut-volume-py/.venv/Scripts/python.exe -c \"import cielab_gamut_tools; print\\(''ok''\\)\")"
+    ]
+  }
+}
