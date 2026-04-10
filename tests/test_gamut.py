@@ -130,7 +130,7 @@ class TestGamutIntersection:
         ab = srgb.intersect(bt2020).volume()
         ba = bt2020.intersect(srgb).volume()
 
-        assert ab == pytest.approx(ba, rel=0.001)
+        assert ab == pytest.approx(ba, rel=0.0005)
 
     def test_intersection_smaller_than_either(self):
         """Intersection volume should be <= min of both volumes."""
@@ -140,7 +140,7 @@ class TestGamutIntersection:
         intersection = srgb.intersect(bt2020)
         min_vol = min(srgb.volume(), bt2020.volume())
 
-        assert intersection.volume() <= min_vol * 1.001  # Small tolerance
+        assert intersection.volume() <= min_vol * 1.0005  # Small tolerance
 
     def test_self_intersection_equals_self(self):
         """A ∩ A should equal A."""
