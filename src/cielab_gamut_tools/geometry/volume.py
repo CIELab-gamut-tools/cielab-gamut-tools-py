@@ -114,6 +114,104 @@ def _process_hue_loop_nb(
     return result, counts
 
 
+@numba.njit(cache=True)
+def _intersect_all_cells_nb(
+    cylmap_a: NDArray,
+    counts_a: NDArray,
+    cylmap_b: NDArray,
+    counts_b: NDArray,
+) -> tuple[NDArray, NDArray]:
+    """
+    JIT-compiled full intersection of two cylindrical maps.
+
+    Replaces the Python double-loop over all (L*, hue) cells in intersect_gamuts.
+    For each cell, combines entries from both gamuts, sorts by distance
+    (descending), streams through tracking the inside/outside state for each
+    gamut, and records transitions — matching IntersectGamuts.m.
+
+    Args:
+        cylmap_a: First gamut map, shape (l_steps, h_steps, max_k, 2).
+        counts_a: Hit counts for first gamut, shape (l_steps, h_steps).
+        cylmap_b: Second gamut map, shape (l_steps, h_steps, max_k, 2).
+        counts_b: Hit counts for second gamut, shape (l_steps, h_steps).
+
+    Returns:
+        cylmap_out: Intersected map, shape (l_steps, h_steps, max_k, 2).
+        counts_out: Hit counts for intersection, shape (l_steps, h_steps).
+    """
+    l_steps = cylmap_a.shape[0]
+    h_steps = cylmap_a.shape[1]
+    max_k = cylmap_a.shape[2]
+
+    cylmap_out = np.zeros((l_steps, h_steps, max_k, 2))
+    counts_out = np.zeros((l_steps, h_steps), dtype=np.int64)
+
+    # Pre-allocate combined buffer: at most max_k entries from each gamut
+    combined = np.zeros((2 * max_k, 4))
+
+    for p in range(l_steps):
+        for q in range(h_steps):
+            ca = counts_a[p, q]
+            cb = counts_b[p, q]
+
+            if ca == 0 or cb == 0:
+                continue
+
+            n = ca + cb
+
+            # Fill combined: columns are [sign, distance, in_a, in_b]
+            for i in range(ca):
+                combined[i, 0] = cylmap_a[p, q, i, 0]
+                combined[i, 1] = cylmap_a[p, q, i, 1]
+                combined[i, 2] = cylmap_a[p, q, i, 0]
+                combined[i, 3] = 0.0
+            for i in range(cb):
+                combined[ca + i, 0] = cylmap_b[p, q, i, 0]
+                combined[ca + i, 1] = cylmap_b[p, q, i, 1]
+                combined[ca + i, 2] = 0.0
+                combined[ca + i, 3] = cylmap_b[p, q, i, 0]
+
+            # Insertion sort by distance descending (n <= 2*max_k, typically 2)
+            for i in range(1, n):
+                k0 = combined[i, 0]
+                k1 = combined[i, 1]
+                k2 = combined[i, 2]
+                k3 = combined[i, 3]
+                j = i - 1
+                while j >= 0 and combined[j, 1] < k1:
+                    combined[j + 1, 0] = combined[j, 0]
+                    combined[j + 1, 1] = combined[j, 1]
+                    combined[j + 1, 2] = combined[j, 2]
+                    combined[j + 1, 3] = combined[j, 3]
+                    j -= 1
+                combined[j + 1, 0] = k0
+                combined[j + 1, 1] = k1
+                combined[j + 1, 2] = k2
+                combined[j + 1, 3] = k3
+
+            # Stream through tracking inside state; record where min changes.
+            # Equivalent to: changes = np.diff(np.minimum(cumsum_a, cumsum_b),
+            #                                  prepend=0) != 0
+            cs_a = 0.0
+            cs_b = 0.0
+            prev_inside = 0.0
+            n_kept = 0
+
+            for i in range(n):
+                cs_a += combined[i, 2]
+                cs_b += combined[i, 3]
+                inside = cs_a if cs_a < cs_b else cs_b  # min(cs_a, cs_b)
+                if inside != prev_inside and n_kept < max_k:
+                    cylmap_out[p, q, n_kept, 0] = combined[i, 0]
+                    cylmap_out[p, q, n_kept, 1] = combined[i, 1]
+                    n_kept += 1
+                prev_inside = inside
+
+            counts_out[p, q] = n_kept
+
+    return cylmap_out, counts_out
+
+
 def compute_volume(
     lab: NDArray[np.floating],
     triangles: NDArray[np.integer],
@@ -324,19 +422,10 @@ def intersect_gamuts(
     cylmap_a, counts_a = get_cylindrical_map(gamut_a, l_steps, h_steps)
     cylmap_b, counts_b = get_cylindrical_map(gamut_b, l_steps, h_steps)
 
-    # Intersect the cylindrical maps cell by cell
-    cylmap_intersected = np.zeros((l_steps, h_steps, _MAX_K, 2))
-    counts_intersected = np.zeros((l_steps, h_steps), dtype=np.int64)
-
-    for p in range(l_steps):
-        for q in range(h_steps):
-            result_data, result_count = _intersect_cells(
-                cylmap_a[p, q], int(counts_a[p, q]),
-                cylmap_b[p, q], int(counts_b[p, q]),
-            )
-            if result_count > 0:
-                cylmap_intersected[p, q] = result_data
-                counts_intersected[p, q] = result_count
+    # Intersect the cylindrical maps (JIT-compiled double loop)
+    cylmap_intersected, counts_intersected = _intersect_all_cells_nb(
+        cylmap_a, counts_a, cylmap_b, counts_b,
+    )
 
     # Create a Gamut-like object with the intersected map
     # We use empty arrays for lab/triangles since we only have cylmap
@@ -357,81 +446,6 @@ def intersect_gamuts(
     )
 
     return intersected
-
-
-def _intersect_cells(
-    data_a: NDArray[np.floating],
-    count_a: int,
-    data_b: NDArray[np.floating],
-    count_b: int,
-) -> tuple[NDArray[np.floating], int]:
-    """
-    Intersect two cylindrical map cells.
-
-    Each cell contains [sign, distance] pairs representing ray intersections
-    with the gamut surface. The intersection keeps only the regions where
-    both gamuts overlap.
-
-    Cells arriving here from _build_cylindrical_map are already parity-clean.
-
-    This matches the local intersect() function in IntersectGamuts.m.
-
-    Args:
-        data_a: Cell data from first gamut, shape (_MAX_K, 2).
-        count_a: Number of valid entries in data_a.
-        data_b: Cell data from second gamut, shape (_MAX_K, 2).
-        count_b: Number of valid entries in data_b.
-
-    Returns:
-        Tuple of (result_data, result_count) where result_data has
-        shape (_MAX_K, 2).
-    """
-    empty: NDArray[np.floating] = np.zeros((_MAX_K, 2))
-
-    if count_a == 0 or count_b == 0:
-        return empty, 0
-
-    cell_a = data_a[:count_a]  # (count_a, 2) - already parity-clean from build
-    cell_b = data_b[:count_b]  # (count_b, 2) - already parity-clean from build
-
-    sa, sb = count_a, count_b
-
-    # Build combined array with columns: [sign, distance, in_a, in_b]
-    # where in_a and in_b track which gamut each intersection belongs to
-    combined = np.zeros((sa + sb, 4))
-
-    # Add cell_a entries
-    combined[:sa, 0] = cell_a[:, 0]  # sign
-    combined[:sa, 1] = cell_a[:, 1]  # distance
-    combined[:sa, 2] = cell_a[:, 0]  # in_a tracking
-
-    # Add cell_b entries
-    combined[sa:, 0] = cell_b[:, 0]  # sign
-    combined[sa:, 1] = cell_b[:, 1]  # distance
-    combined[sa:, 3] = cell_b[:, 0]  # in_b tracking
-
-    # Sort by distance (descending, to match MATLAB)
-    sort_idx = np.argsort(-combined[:, 1])
-    combined = combined[sort_idx]
-
-    # Compute cumulative sum of in_a and in_b (tracks "inside" state)
-    cumsum_a = np.cumsum(combined[:, 2])
-    cumsum_b = np.cumsum(combined[:, 3])
-
-    # Take minimum — inside intersection only when inside both
-    inside_both = np.minimum(cumsum_a, cumsum_b)
-
-    # Keep entries where the inside state changes
-    changes = np.diff(inside_both, prepend=0) != 0
-    result_rows = combined[changes, :2]
-
-    n = len(result_rows)
-    result_data = np.zeros((_MAX_K, 2))
-    if n > 0:
-        n_store = min(n, _MAX_K)
-        result_data[:n_store] = result_rows[:n_store]
-
-    return result_data, n
 
 
 def _integrate_cylmap(
@@ -463,3 +477,28 @@ def _integrate_cylmap(
     return float(
         np.sum(cylmap[:, :, :, 0] * cylmap[:, :, :, 1] ** 2 * mask) * dl * dh / 2
     )
+
+
+def _warmup_numba() -> None:
+    """
+    Trigger JIT compilation of Numba functions at import time.
+
+    With cache=True, Numba writes compiled bytecode to __pycache__ on first
+    run and loads it on subsequent runs.  Calling both functions here with
+    minimal dummy arrays means the cache-load cost (~50 ms) is paid at import
+    rather than during the first real computation.
+    """
+    _process_hue_loop_nb(
+        np.zeros((1, 1)),
+        np.zeros((1, 1)),
+        np.zeros((1, 1), dtype=np.bool_),
+    )
+    _intersect_all_cells_nb(
+        np.zeros((1, 1, _MAX_K, 2)),
+        np.zeros((1, 1), dtype=np.int64),
+        np.zeros((1, 1, _MAX_K, 2)),
+        np.zeros((1, 1), dtype=np.int64),
+    )
+
+
+_warmup_numba()

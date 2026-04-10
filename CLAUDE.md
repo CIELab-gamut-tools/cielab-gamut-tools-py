@@ -23,9 +23,20 @@ Python implementation of gamut volume calculation for color displays. This is a 
 - Intersection commutativity confirmed (A∩B == B∩A) ✓
 - Self-intersection confirmed (A∩A == A) ✓
 
+### Performance
+Full test suite runs in ~700 ms. Intersection tests run in ~50–100 ms each.
+Original unoptimised implementation took ~26 s for the same tests (~37× improvement).
+
+Optimisations applied (in order):
+1. **Cylindrical map caching** — cached on the `Gamut` object; shared between `volume()` and `intersect()` calls
+2. **Vectorised hue loop** — all 360 ray directions batched into a single matrix multiply per L* slice (`e2e1_2d @ all_dirs.T`), replacing a 360-iteration Python loop
+3. **Numba JIT: inner hue loop** — `_process_hue_loop_nb` compiles the per-cell collect/sort/parity-filter loop to native code; cylmap format changed from Python object array to dense `(l_steps, h_steps, MAX_K, 2)` float64 array + `(l_steps, h_steps)` int64 count array
+4. **Numba JIT: intersection loop** — `_intersect_all_cells_nb` compiles the full 36,000-cell `intersect_gamuts` double-loop to native code, with a pre-allocated temp buffer to avoid per-cell heap allocation
+5. **Vectorised integration** — `_integrate_cylmap` is a single `np.sum` over a masked dense array; no loop
+6. **Numba warm-up at import** — both JIT functions are called with minimal dummy arrays at module load time, so cache-load cost is paid at import rather than on the first real computation
+
 ### Known Gaps
 1. **Plotting untested interactively** — `plot_surface()` and `plot_rings()` have no automated tests
-2. **Performance** — Volume calculation uses nested Python loops (100 L* × 360 hue = 36,000 cells); slower than MATLAB
 
 ## Architecture
 
@@ -76,22 +87,31 @@ Uses ray-triangle intersection (Möller-Trumbore algorithm), NOT rasterization.
 
 1. Reorder Lab to `[a*, b*, L*]` to match MATLAB's Z matrix
 2. For each L* slice (100 steps), find triangles spanning that L*
-3. For each hue angle (360 steps), shoot ray from `(0, 0, L_mid)` in direction `(sin(h), cos(h), 0)`
-4. Find ray-triangle intersections using Möller-Trumbore
-5. Record `[sign(1/det), t]` for each intersection (sign indicates surface orientation)
-6. Apply parity filter to handle edge cases
-7. Integrate: `V = Σ sign × t² × dL × dh / 2`
+3. Batch all 360 ray directions into a single matrix multiply per slice
+4. Pass resulting `(n_tri, 360)` arrays to `_process_hue_loop_nb` (Numba JIT)
+5. JIT loop: for each hue, collect valid hits, sort by distance, apply parity filter
+6. Integrate: `V = Σ sign × t² × dL × dh / 2` (fully vectorised, no loop)
 
-**Key code patterns from MATLAB:**
+**Cylindrical map format:**
 ```python
-# Ray direction (note: sin,cos not cos,sin)
-dir_2d = np.array([np.sin(hue_mid), np.cos(hue_mid)])
+cylmap:  np.ndarray  shape (l_steps, h_steps, MAX_K, 2)  # [..., 0]=sign, [..., 1]=distance
+counts:  np.ndarray  shape (l_steps, h_steps)             # valid entries per cell
+```
+`MAX_K = 4`. Most cells have 0 (below black level) or 1 (origin inside gamut, single
+surface exit) valid intersection after parity filtering; rarely 2.
 
-# Parity filter (matching MATLAB exactly)
+**Parity filter (matching MATLAB exactly):**
+```python
+# keep entry i where (cumsum of signs from i to end) * 2 - sign == 1
 flipped_signs = cm[::-1, 0]
 cumsum_flipped = np.cumsum(flipped_signs)
 parity_check = cumsum_flipped[::-1] * 2 - cm[:, 0]
 keep = parity_check == 1
+```
+
+**Key ray direction convention (note: sin,cos not cos,sin):**
+```python
+dir_2d = np.array([np.sin(hue_mid), np.cos(hue_mid)])  # puts 0° along +b* axis
 ```
 
 ### RGB to XYZ Matrix (synthetic.py)
@@ -128,19 +148,12 @@ gamut.plot_surface()
 gamut.plot_rings(reference=srgb)
 ```
 
-## Next Steps (Priority Order)
+## Next Steps
 
-### 1. Test Plotting Interactively
+### Test Plotting Interactively
 
 `plot_surface()` and `plot_rings()` are written but have no automated tests. Verify they
 produce correct figures with real data and add smoke tests (figure creation without errors).
-
-### 2. Optimize Volume Calculation Performance
-
-Current implementation has nested Python loops (100 L* × 360 hue = 36,000 cells). Options:
-- Vectorize the inner hue loop across all 360 hue angles at once
-- Use numba JIT compilation
-- Parallelize with multiprocessing
 
 ## Development
 
@@ -197,5 +210,6 @@ Extensive unit testing is a primary goal (improving on limited MATLAB testing).
 
 - **Python:** ≥3.10
 - **Package name:** `cielab-gamut-tools` (PyPI), import as `cielab_gamut_tools`
+- **Dependencies:** numpy, matplotlib, scipy, numba (≥0.57)
 - **Build system:** hatchling with pyproject.toml
 - **Layout:** src layout
