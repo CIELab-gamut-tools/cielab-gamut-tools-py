@@ -12,7 +12,10 @@
       "Bash(.venv/Scripts/pip install:*)",
       "Bash(.venv/Scripts/python -c \"from cielab_gamut_tools import SyntheticGamut; print\\(SyntheticGamut.srgb\\(\\).volume\\(\\)\\)\")",
       "Bash(cmd /c \".venv\\\\Scripts\\\\python -c \"\"from cielab_gamut_tools import SyntheticGamut; print\\(SyntheticGamut.srgb\\(\\).volume\\(\\)\\)\"\" 2>&1\")",
-      "Bash(C:/dev/IDMS/gamut-volume-py/.venv/Scripts/python.exe -c \"import cielab_gamut_tools; print\\(''ok''\\)\")"
+      "Bash(C:/dev/IDMS/gamut-volume-py/.venv/Scripts/python.exe -c \"import cielab_gamut_tools; print\\(''ok''\\)\")",
+      "Bash(wc -l /c/dev/IDMS/gamut-volume-py/src/cielab_gamut_tools/*.py /c/dev/IDMS/gamut-volume-py/src/cielab_gamut_tools/*/*.py)",
+      "Bash(python -m pytest tests/ -v)",
+      "Bash(.venvScriptspip install:*)"
     ]
   }
 }

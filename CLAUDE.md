@@ -6,22 +6,26 @@ Python implementation of gamut volume calculation for color displays. This is a 
 
 ## Implementation Status
 
-### Working
+### Working — All 55 tests passing
 - **SyntheticGamut**: sRGB, BT.2020, DCI-P3, Display P3, custom gamuts
 - **Volume calculation**: Ray-triangle intersection algorithm matching MATLAB
 - **Colorspace**: XYZ↔Lab, Bradford chromatic adaptation, sRGB gamma
 - **Tesselation**: RGB cube surface with correct triangle winding
-- **CGATS parsing**: Basic CGATS.17 file reading
-- **All unit tests passing**
+- **CGATS parsing**: CGATS.17 file reading with RGB+XYZ extraction
+- **`_interpolate_xyz()`**: Scipy-based scattered interpolation for measured data
+- **`Gamut.from_cgats()` / `Gamut.from_xyz()`**: Full pipeline from measurements to Lab surface
+- **`intersect_gamuts()`**: Gamut intersection via cylindrical map intersection
+- **Plotting**: `plot_surface()` and `plot_rings()` written (untested interactively)
 
 ### Verified Results
-- `SyntheticGamut.srgb().volume()` → 830,330 (MATLAB: 830,766, difference ~0.05%)
+- `SyntheticGamut.srgb().volume()` → ~830,330 (MATLAB: 830,766, difference ~0.05%, within 1% tolerance)
+- BT.2020 volume confirmed larger than sRGB ✓
+- Intersection commutativity confirmed (A∩B == B∩A) ✓
+- Self-intersection confirmed (A∩A == A) ✓
 
-### Not Yet Implemented
-1. **`_interpolate_xyz()`** in `gamut.py` - Required for `Gamut.from_cgats()` and `Gamut.from_xyz()` to work with measured data
-2. **`intersect_gamuts()`** in `geometry/volume.py` - Gamut intersection
-3. **Plotting functions** - `plot_surface()` and `plot_rings()` are stubbed but untested
-4. **Performance optimization** - Volume calculation is slower than MATLAB due to Python loops
+### Known Gaps
+1. **Plotting untested interactively** — `plot_surface()` and `plot_rings()` have no automated tests
+2. **Performance** — Volume calculation uses nested Python loops (100 L* × 360 hue = 36,000 cells); slower than MATLAB
 
 ## Architecture
 
@@ -112,44 +116,31 @@ custom = SyntheticGamut(primaries_xy, white_xy, gamma=2.2)
 # Volume calculation (WORKING)
 volume = srgb.volume()
 
-# Load from CGATS file (NOT YET WORKING - needs _interpolate_xyz)
+# Load from CGATS file (WORKING)
 gamut = Gamut.from_cgats("measurements.txt")
 
-# Intersection (NOT YET IMPLEMENTED)
+# Intersection (WORKING)
 intersection = gamut.intersect(srgb)
 coverage = intersection.volume() / srgb.volume() * 100
 
-# Visualization (UNTESTED)
+# Visualization (written, untested interactively)
 gamut.plot_surface()
 gamut.plot_rings(reference=srgb)
 ```
 
 ## Next Steps (Priority Order)
 
-### 1. Implement `_interpolate_xyz()` in gamut.py
+### 1. Test Plotting Interactively
 
-This function interpolates XYZ values from measured RGB/XYZ pairs to the tesselation vertices. The MATLAB approach:
-- Uses the measured RGB values directly as the tesselation grid
-- See `CIELabGamut.m` lines ~140: `make_tesselation(unique(gamut.RGB))`
-- May need scattered interpolation (scipy) for arbitrary measurement grids
+`plot_surface()` and `plot_rings()` are written but have no automated tests. Verify they
+produce correct figures with real data and add smoke tests (figure creation without errors).
 
 ### 2. Optimize Volume Calculation Performance
 
-Current implementation has nested Python loops (100 L* × 360 hue). Options:
-- Vectorize the inner hue loop
+Current implementation has nested Python loops (100 L* × 360 hue = 36,000 cells). Options:
+- Vectorize the inner hue loop across all 360 hue angles at once
 - Use numba JIT compilation
 - Parallelize with multiprocessing
-
-### 3. Implement Gamut Intersection
-
-See `IntersectGamuts.m` in MATLAB. Algorithm:
-- Build cylindrical maps for both gamuts
-- Take minimum chroma at each (L*, h) cell
-- Create new gamut object from intersection map
-
-### 4. Test and Fix Plotting
-
-The plotting code is written but untested. May need fixes.
 
 ## Development
 
@@ -172,7 +163,7 @@ ruff check src tests      # Linting
 ### Quick Test
 ```python
 from cielab_gamut_tools import SyntheticGamut
-print(SyntheticGamut.srgb().volume())  # Should be ~830,330
+print(SyntheticGamut.srgb().volume())  # Should be ~830,330 (within 1% of MATLAB's 830,766)
 ```
 
 ## Reference Material

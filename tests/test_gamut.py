@@ -37,7 +37,6 @@ class TestGamutCreation:
     )
     def test_from_cgats(self):
         """Test loading Gamut from CGATS file."""
-        pytest.skip("from_cgats requires interpolation implementation")
         gamut = Gamut.from_cgats(SAMPLES_DIR / "sRGB.txt")
         assert gamut.lab.shape[1] == 3
 
@@ -106,8 +105,6 @@ class TestGamutVolume:
 
     def test_srgb_reference_volume(self):
         """sRGB should have volume approximately 830,732."""
-        pytest.skip("Volume computation not yet fully implemented")
-
         srgb = SyntheticGamut.srgb()
         volume = srgb.volume()
 
@@ -116,8 +113,6 @@ class TestGamutVolume:
 
     def test_bt2020_larger_than_srgb(self):
         """BT.2020 should have larger volume than sRGB."""
-        pytest.skip("Volume computation not yet fully implemented")
-
         srgb = SyntheticGamut.srgb()
         bt2020 = SyntheticGamut.bt2020()
 
@@ -129,8 +124,6 @@ class TestGamutIntersection:
 
     def test_intersection_commutative(self):
         """A ∩ B should equal B ∩ A."""
-        pytest.skip("Intersection not yet implemented")
-
         srgb = SyntheticGamut.srgb()
         bt2020 = SyntheticGamut.bt2020()
 
@@ -141,8 +134,6 @@ class TestGamutIntersection:
 
     def test_intersection_smaller_than_either(self):
         """Intersection volume should be <= min of both volumes."""
-        pytest.skip("Intersection not yet implemented")
-
         srgb = SyntheticGamut.srgb()
         bt2020 = SyntheticGamut.bt2020()
 
@@ -153,8 +144,6 @@ class TestGamutIntersection:
 
     def test_self_intersection_equals_self(self):
         """A ∩ A should equal A."""
-        pytest.skip("Intersection not yet implemented")
-
         srgb = SyntheticGamut.srgb()
 
         self_intersection = srgb.intersect(srgb)

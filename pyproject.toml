@@ -35,6 +35,7 @@ classifiers = [
 dependencies = [
     "numpy>=1.21",
     "matplotlib>=3.5",
+    "scipy>=1.7",
 ]
 
 [project.optional-dependencies]

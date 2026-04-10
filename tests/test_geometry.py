@@ -88,22 +88,32 @@ class TestMakeTesselation:
 class TestVolumeComputation:
     """Tests for gamut volume calculation."""
 
-    # Note: More comprehensive tests will be added once the volume
-    # computation is fully implemented and can be validated against
-    # known reference values from the MATLAB implementation.
-
     def test_srgb_reference_volume(self):
         """
         sRGB synthetic gamut should have volume ~830,732.
 
         This is a known reference value from the MATLAB implementation.
+        Allow 1% tolerance for numerical differences.
         """
-        pytest.skip("Volume computation not yet fully implemented")
+        from cielab_gamut_tools.synthetic import SyntheticGamut
+
+        srgb = SyntheticGamut.srgb()
+        volume = srgb.volume()
+
+        assert volume == pytest.approx(830732, rel=0.01)
 
     def test_volume_is_positive(self):
         """Gamut volume should always be positive."""
-        pytest.skip("Volume computation not yet fully implemented")
+        from cielab_gamut_tools.synthetic import SyntheticGamut
+
+        srgb = SyntheticGamut.srgb()
+        assert srgb.volume() > 0
 
     def test_larger_gamut_larger_volume(self):
         """BT.2020 should have larger volume than sRGB."""
-        pytest.skip("Volume computation not yet fully implemented")
+        from cielab_gamut_tools.synthetic import SyntheticGamut
+
+        srgb = SyntheticGamut.srgb()
+        bt2020 = SyntheticGamut.bt2020()
+
+        assert bt2020.volume() > srgb.volume()
