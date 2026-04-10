@@ -100,9 +100,13 @@ def _build_cylindrical_map(
     max_L = np.maximum(np.maximum(tri_v0[:, 2], tri_v1[:, 2]), tri_v2[:, 2])
 
     # Define L* and Hue grid
-    delta_hue = 2 * np.pi / h_steps
     L_edges = np.linspace(0, 100, l_steps + 1)
     hue_edges = np.linspace(0, 2 * np.pi, h_steps + 1)
+    hue_mids = (hue_edges[:-1] + hue_edges[1:]) / 2
+
+    # Precompute all ray directions: (h_steps, 2)
+    # Note: MATLAB uses [sin(h), cos(h)] which puts 0° along +b* axis
+    all_dirs = np.column_stack([np.sin(hue_mids), np.cos(hue_mids)])
 
     # Initialize cylindrical map as object array
     cylmap = np.empty((l_steps, h_steps), dtype=object)
@@ -115,8 +119,7 @@ def _build_cylindrical_map(
         ix = np.where((L_mid >= min_L) & (L_mid <= max_L))[0]
 
         if len(ix) == 0:
-            for q in range(h_steps):
-                cylmap[p, q] = None
+            cylmap[p, :] = None
             continue
 
         # Get vertices of relevant triangles
@@ -124,87 +127,66 @@ def _build_cylindrical_map(
         vert1 = tri_v1[ix]
         vert2 = tri_v2[ix]
 
-        # Ray origin at (0, 0, L_mid) - replicated for each triangle
-        orig = np.zeros((len(ix), 3))
-        orig[:, 2] = L_mid
+        # Ray origin at (0, 0, L_mid)
+        orig = np.array([0.0, 0.0, L_mid])
 
-        # Edge vectors
+        # Edge vectors and origin offset
         edge1 = vert1 - vert0
         edge2 = vert2 - vert0
-
-        # Vector from vertex to origin
         o = orig - vert0
 
-        # Pre-calculate cross products (these don't depend on ray direction)
-        e2e1 = np.cross(edge2, edge1)
-        e2o = np.cross(edge2, o)
-        oe1 = np.cross(o, edge1)
+        # Cross products (don't depend on ray direction)
+        e2e1 = np.cross(edge2, edge1)  # (n_tri, 3)
+        e2o = np.cross(edge2, o)       # (n_tri, 3)
+        oe1 = np.cross(o, edge1)       # (n_tri, 3)
 
         # Determinant component that doesn't involve direction
-        # e2oe1 = dot(edge2, cross(o, edge1)) = dot(edge2, oe1)
-        e2oe1 = np.sum(edge2 * oe1, axis=1)
+        e2oe1 = np.sum(edge2 * oe1, axis=1)  # (n_tri,)
 
-        # Drop the L* coordinate as ray direction always has dL*=0
-        # (ray is in the a*-b* plane at constant L*)
-        e2e1_2d = e2e1[:, :2]
+        # Drop the L* coordinate — ray direction always has dL*=0
+        e2e1_2d = e2e1[:, :2]  # (n_tri, 2)
         e2o_2d = e2o[:, :2]
         oe1_2d = oe1[:, :2]
 
-        # For every step in Hue
+        # Batch all 360 hue directions in one matrix multiply: (n_tri, h_steps)
+        all_dets = e2e1_2d @ all_dirs.T    # (n_tri, h_steps)
+        all_u_num = e2o_2d @ all_dirs.T    # (n_tri, h_steps)
+        all_v_num = oe1_2d @ all_dirs.T    # (n_tri, h_steps)
+
+        with np.errstate(divide='ignore', invalid='ignore'):
+            all_idet = np.where(np.abs(all_dets) > 1e-10, 1.0 / all_dets, 0.0)
+
+        all_u = all_u_num * all_idet        # (n_tri, h_steps)
+        all_v = all_v_num * all_idet        # (n_tri, h_steps)
+        all_t = e2oe1[:, None] * all_idet   # (n_tri, h_steps)
+
+        # Validity masks: (n_tri, h_steps)
+        valid_strict = (all_u >= 0) & (all_v >= 0) & (all_u + all_v <= 1) & (all_t >= 0)
+        valid_loose = (all_u >= -0.001) & (all_v >= -0.001) & (all_u + all_v <= 1.001) & (all_t >= 0)
+
+        # Per hue: use strict mask where it has any hits, loose otherwise
+        has_strict = valid_strict.any(axis=0)  # (h_steps,)
+        valid = np.where(has_strict[None, :], valid_strict, valid_loose)  # (n_tri, h_steps)
+
+        # Light per-hue loop: parity filter and cylmap population only
         for q in range(h_steps):
-            hue_mid = (hue_edges[q] + hue_edges[q + 1]) / 2
+            valid_q = valid[:, q]
 
-            # Ray direction unit vector in a*-b* plane
-            # Note: MATLAB uses [sin(h), cos(h)] which puts 0° along +b* axis
-            dir_2d = np.array([np.sin(hue_mid), np.cos(hue_mid)])
-
-            # Compute ray-triangle intersection using Möller-Trumbore algorithm
-            # idet = 1 / dot(edge2 × edge1, dir)
-            det = e2e1_2d @ dir_2d
-
-            # Avoid division by zero
-            with np.errstate(divide='ignore', invalid='ignore'):
-                idet = np.where(np.abs(det) > 1e-10, 1.0 / det, 0.0)
-
-            # Barycentric coordinates
-            u = (e2o_2d @ dir_2d) * idet
-            v = (oe1_2d @ dir_2d) * idet
-
-            # Distance along ray (chroma value)
-            t = e2oe1 * idet
-
-            # Find triangles where ray passes within their edges
-            # Triangle interior: u >= 0, v >= 0, u + v <= 1, t >= 0
-            valid = (u >= 0) & (v >= 0) & (u + v <= 1) & (t >= 0)
-
-            # If no valid intersection found, try with tolerance
-            if not np.any(valid):
-                valid = (u >= -0.001) & (v >= -0.001) & (u + v <= 1.001) & (t >= 0)
-
-            if not np.any(valid):
+            if not np.any(valid_q):
                 cylmap[p, q] = None
                 continue
 
-            # Get sign (surface orientation) and distance for valid intersections
-            signs = np.sign(idet[valid])
-            distances = t[valid]
+            signs = np.sign(all_idet[valid_q, q])
+            distances = all_t[valid_q, q]
 
-            # Build intersection array [sign, t]
             cm = np.column_stack([signs, distances])
+            cm = cm[np.argsort(cm[:, 1])]
 
-            # Sort by distance
-            sort_idx = np.argsort(cm[:, 1])
-            cm = cm[sort_idx]
-
-            # Check for surface parity errors (matching MATLAB logic)
-            # This handles cases where rays graze edges
-            # cm = cm(flip(cumsum(flip(cm(:,1))))*2-cm(:,1)==1,:)
-            if len(cm) > 0:
-                flipped_signs = cm[::-1, 0]
-                cumsum_flipped = np.cumsum(flipped_signs)
-                parity_check = cumsum_flipped[::-1] * 2 - cm[:, 0]
-                keep = parity_check == 1
-                cm = cm[keep]
+            # Parity filter (matching MATLAB logic)
+            flipped_signs = cm[::-1, 0]
+            cumsum_flipped = np.cumsum(flipped_signs)
+            parity_check = cumsum_flipped[::-1] * 2 - cm[:, 0]
+            cm = cm[parity_check == 1]
 
             cylmap[p, q] = cm if len(cm) > 0 else None
 
