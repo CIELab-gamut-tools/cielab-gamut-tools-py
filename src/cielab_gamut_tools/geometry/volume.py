@@ -217,7 +217,7 @@ def get_cylindrical_map(
     h_steps: int = 360,
 ) -> NDArray:
     """
-    Get the cylindrical map for a gamut.
+    Get the cylindrical map for a gamut, building and caching it if needed.
 
     This is useful for gamut intersection calculations.
 
@@ -229,7 +229,11 @@ def get_cylindrical_map(
     Returns:
         Cylindrical map array.
     """
-    return _build_cylindrical_map(gamut.lab, gamut.triangles, l_steps, h_steps)
+    if gamut._cylindrical_map is None:
+        gamut._cylindrical_map = _build_cylindrical_map(
+            gamut.lab, gamut.triangles, l_steps, h_steps
+        )
+    return gamut._cylindrical_map
 
 
 def intersect_gamuts(
@@ -268,9 +272,9 @@ def intersect_gamuts(
     if hasattr(gamut_b, "gamut"):
         gamut_b = gamut_b.gamut
 
-    # Build cylindrical maps for both gamuts
-    cylmap_a = _build_cylindrical_map(gamut_a.lab, gamut_a.triangles, l_steps, h_steps)
-    cylmap_b = _build_cylindrical_map(gamut_b.lab, gamut_b.triangles, l_steps, h_steps)
+    # Build cylindrical maps for both gamuts (cached on the gamut objects)
+    cylmap_a = get_cylindrical_map(gamut_a, l_steps, h_steps)
+    cylmap_b = get_cylindrical_map(gamut_b, l_steps, h_steps)
 
     # Intersect the cylindrical maps cell by cell
     cylmap_intersected = np.empty((l_steps, h_steps), dtype=object)

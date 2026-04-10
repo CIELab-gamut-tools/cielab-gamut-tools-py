@@ -122,9 +122,13 @@ class Gamut:
             The gamut volume.
         """
         if self._volume is None:
-            from cielab_gamut_tools.geometry.volume import compute_volume
+            from cielab_gamut_tools.geometry.volume import (
+                get_cylindrical_map,
+                _integrate_cylmap,
+            )
 
-            self._volume = compute_volume(self.lab, self.triangles)
+            cylmap = get_cylindrical_map(self)
+            self._volume = _integrate_cylmap(cylmap, 100, 360)
         return self._volume
 
     def intersect(self, other: Gamut | SyntheticGamut) -> Gamut:
