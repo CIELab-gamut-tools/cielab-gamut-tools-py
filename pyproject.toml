@@ -36,6 +36,7 @@ dependencies = [
     "numpy>=1.21",
     "matplotlib>=3.5",
     "scipy>=1.7",
+    "numba>=0.57",
 ]
 
 [project.optional-dependencies]

@@ -49,6 +49,7 @@ class Gamut:
         self.triangles = triangles
         self._volume: float | None = None
         self._cylindrical_map: NDArray[np.floating] | None = None
+        self._cylmap_counts: NDArray[np.integer] | None = None
 
     @classmethod
     def from_cgats(cls, path: str) -> Gamut:
@@ -127,8 +128,8 @@ class Gamut:
                 _integrate_cylmap,
             )
 
-            cylmap = get_cylindrical_map(self)
-            self._volume = _integrate_cylmap(cylmap, 100, 360)
+            cylmap, counts = get_cylindrical_map(self)
+            self._volume = _integrate_cylmap(cylmap, counts, 100, 360)
         return self._volume
 
     def intersect(self, other: Gamut | SyntheticGamut) -> Gamut:
