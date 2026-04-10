@@ -108,8 +108,8 @@ class TestGamutVolume:
         srgb = SyntheticGamut.srgb()
         volume = srgb.volume()
 
-        # Allow 1% tolerance
-        assert volume == pytest.approx(830732, rel=0.01)
+        # Allow 0.05% tolerance
+        assert volume == pytest.approx(830732, rel=0.0005)
 
     def test_bt2020_larger_than_srgb(self):
         """BT.2020 should have larger volume than sRGB."""
