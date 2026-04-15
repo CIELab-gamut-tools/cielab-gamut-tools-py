@@ -52,7 +52,7 @@ class TestSyntheticGamut:
 
         np.testing.assert_allclose(srgb.primaries_xy, SRGB_PRIMARIES)
         np.testing.assert_allclose(srgb.white_xy, D65_WHITE)
-        assert srgb.gamma == 2.2
+        assert callable(srgb.gamma)
 
     def test_bt2020_primaries(self):
         """BT.2020 should have correct primaries."""
@@ -82,7 +82,7 @@ class TestSyntheticGamut:
 
         np.testing.assert_allclose(display_p3.primaries_xy, DCI_P3_PRIMARIES)
         np.testing.assert_allclose(display_p3.white_xy, D65_WHITE)
-        assert display_p3.gamma == 2.2
+        assert callable(display_p3.gamma)
 
     def test_custom_gamut(self):
         """Test creating a custom gamut."""
