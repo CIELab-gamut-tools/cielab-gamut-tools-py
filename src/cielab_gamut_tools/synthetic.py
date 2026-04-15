@@ -4,6 +4,7 @@ Synthetic reference gamut generation.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -25,6 +26,26 @@ SRGB_PRIMARIES = np.array([
     [0.3000, 0.6000],  # Green
     [0.1500, 0.0600],  # Blue
 ])
+
+def srgb_gamma(gs: NDArray[np.floating]) -> NDArray[np.floating]:
+    """
+    Apply the sRGB piecewise gamma (linearise encoded sRGB values).
+
+    Matches the MATLAB reference ``sRGBgamma(v)`` exactly::
+
+        d = 25*v/323          for v <= 0.04045
+        d = ((200*v+11)/211)^2.4  for v >  0.04045
+
+    Args:
+        gs: sRGB-encoded values as a numpy array, range [0, 1].
+
+    Returns:
+        Linear values as a numpy array, same shape as *gs*.
+    """
+    val = 25.0 * gs / 323.0
+    sel = gs > 0.04045
+    val[sel] = np.power(((200.0 * gs[sel] + 11.0) / 211.0), 2.4)
+    return val
 
 BT2020_PRIMARIES = np.array([
     [0.708, 0.292],   # Red
@@ -51,7 +72,7 @@ class SyntheticGamut:
         self,
         primaries_xy: NDArray[np.floating],
         white_xy: NDArray[np.floating],
-        gamma: float = 2.2,
+        gamma: float | Callable[[NDArray[np.floating]], NDArray[np.floating]] = 2.2,
         title: str | None = None,
     ) -> None:
         """
@@ -60,7 +81,11 @@ class SyntheticGamut:
         Args:
             primaries_xy: CIE xy chromaticity of RGB primaries, shape (3, 2).
             white_xy: CIE xy chromaticity of white point, shape (2,).
-            gamma: Display gamma (default 2.2 for sRGB-like response).
+            gamma: Display gamma.  Either a plain float (e.g. ``2.4``) whose
+                reciprocal is used as the power-law exponent, or a callable
+                that maps an ``NDArray[np.floating]`` of encoded values to
+                linear values (e.g. :func:`srgb_gamma` for the sRGB piecewise
+                transfer function).  Defaults to ``2.2``.
             title: Human-readable gamut name shown in plot titles.
         """
         self.primaries_xy = np.asarray(primaries_xy)
@@ -73,7 +98,7 @@ class SyntheticGamut:
     @classmethod
     def srgb(cls) -> SyntheticGamut:
         """Create an sRGB reference gamut (D65, gamma 2.2)."""
-        return cls(SRGB_PRIMARIES, D65_WHITE, gamma=2.2, title="sRGB")
+        return cls(SRGB_PRIMARIES, D65_WHITE, gamma = srgb_gamma, title="sRGB")
 
     @classmethod
     def bt2020(cls) -> SyntheticGamut:
@@ -87,8 +112,8 @@ class SyntheticGamut:
 
     @classmethod
     def display_p3(cls) -> SyntheticGamut:
-        """Create a Display P3 reference gamut (D65 white, gamma 2.2)."""
-        return cls(DCI_P3_PRIMARIES, D65_WHITE, gamma=2.2, title="Display P3")
+        """Create a Display P3 reference gamut (D65 white, sRGB gamma)."""
+        return cls(DCI_P3_PRIMARIES, D65_WHITE, gamma = srgb_gamma, title="Display P3")
 
     def _build_gamut(self) -> "Gamut":
         """Build the underlying Gamut object."""
@@ -122,7 +147,10 @@ class SyntheticGamut:
             XYZ tristimulus values, shape (N, 3).
         """
         # Apply gamma to get linear RGB
-        rgb_linear = np.power(rgb, self.gamma)
+        if callable(self.gamma):
+            rgb_linear = self.gamma(rgb)
+        else:
+            rgb_linear = np.power(rgb, self.gamma)
 
         # Build RGB to XYZ matrix from primaries and white point
         M = _build_rgb_to_xyz_matrix(self.primaries_xy, self.white_xy)
