@@ -310,7 +310,14 @@ def plot_rings(
         )
 
     # ── Axis padding, labels, title ───────────────────────────────────────
-    ax.margins(0.05)
+    # Base extent on ring data; if primary arrows are drawn extend to include them.
+    display_extent = max_chroma * 1.05
+    if n_prims > 0 or n_ref_prims > 0:
+        arrow_extent = max(_primary_chroma if n_prims > 0 else 0,
+                           _ref_primary_chroma if n_ref_prims > 0 else 0)
+        display_extent = max(display_extent, arrow_extent * 1.05)
+    ax.set_xlim(-display_extent, display_extent)
+    ax.set_ylim(-display_extent, display_extent)
     ax.set_xlabel("a*$_{RSS}$")
     ax.set_ylabel("b*$_{RSS}$")
 
@@ -626,8 +633,10 @@ def _draw_primaries(
                 ax.plot([opt_r[0], mpt[0]], [opt_r[1], mpt[1]],
                         color=[0.7, 0.7, 0.7], linewidth=1.5)
                 rvect = rpt - mpt
-                ax.annotate("", xy=(rpt[0], rpt[1]), xytext=(mpt[0], mpt[1]),
-                            arrowprops=dict(arrowstyle="-|>", color=rcol, lw=1.5))
+                ann = ax.annotate("", xy=(rpt[0], rpt[1]), xytext=(mpt[0], mpt[1]),
+                            arrowprops=dict(arrowstyle="-|>", color=tuple(rcol), lw=1.5),
+                            annotation_clip=False)
+                ann.arrow_patch.set_clip_on(False)
 
         # ── Test gamut primary ───────────────────────────────────────────
         if n < n_prims and gamut.rgb is not None:
@@ -646,8 +655,11 @@ def _draw_primaries(
                 pt = lab[1:3] * primary_chroma / (np.linalg.norm(lab[1:3]) + 1e-12)
                 opt = (lab[1:3] * ring_chroma / (np.linalg.norm(lab[1:3]) + 1e-12)
                        if ring_origin else np.array([0.0, 0.0]))
-                ax.annotate("", xy=(pt[0], pt[1]), xytext=(opt[0], opt[1]),
-                            arrowprops=dict(arrowstyle="-|>", color=col, lw=1.5))
+                col_tuple = tuple(col) if hasattr(col, "__len__") else col
+                ann = ax.annotate("", xy=(pt[0], pt[1]), xytext=(opt[0], opt[1]),
+                            arrowprops=dict(arrowstyle="-|>", color=col_tuple, lw=1.5),
+                            annotation_clip=False)
+                ann.arrow_patch.set_clip_on(False)
 
         # ── Linking arc between test and reference primary ────────────────
         if ri is not None and i is not None:
