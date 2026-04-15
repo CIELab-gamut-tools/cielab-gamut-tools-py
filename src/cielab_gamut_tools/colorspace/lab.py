@@ -108,6 +108,41 @@ def xy_to_XYZ(xy: NDArray[np.floating], Y: float = 1.0) -> NDArray[np.floating]:
     return np.stack([X, np.full_like(X, Y), Z], axis=-1)
 
 
+# sRGB primaries → XYZ(D65) matrix (matches MATLAB lab2srgb.m)
+_M_SRGB_TO_XYZ = np.array([
+    [0.4124564, 0.3575761, 0.1804375],
+    [0.2126729, 0.7151522, 0.0721750],
+    [0.0193339, 0.1191920, 0.9503041],
+])
+# D65 white = column sums of the transposed matrix = row sums of _M_SRGB_TO_XYZ
+_D65_WHITE_FROM_M = _M_SRGB_TO_XYZ.sum(axis=1)
+_M_XYZ_TO_LINEAR_SRGB = np.linalg.inv(_M_SRGB_TO_XYZ)
+
+
+def lab_to_srgb_display(lab: NDArray[np.floating]) -> NDArray[np.floating]:
+    """
+    Convert CIELab to sRGB [0, 255] for display use only.
+
+    Matches MATLAB CIEtools/lab2srgb.m exactly: uses D65 reference white
+    derived from the sRGB primaries matrix and simple 2.2 power gamma
+    (not the piecewise IEC 61966 sRGB transfer function).
+
+    Args:
+        lab: CIELab values [L*, a*, b*], shape (N, 3) or (3,).
+
+    Returns:
+        sRGB values [0, 255] as float, same shape as input.
+        Clipped and floor-rounded, matching MATLAB output.
+
+    Note:
+        This function is for computing display colours (e.g. band fills,
+        primary arrow colours). Do not use for gamut measurement pipelines.
+    """
+    xyz = lab_to_xyz(lab, white=_D65_WHITE_FROM_M)
+    linear = xyz @ _M_XYZ_TO_LINEAR_SRGB.T
+    return np.floor(np.clip(linear, 0.0, 1.0) ** (1.0 / 2.2) * 255.0)
+
+
 def _lab_f(t: NDArray[np.floating]) -> NDArray[np.floating]:
     """CIELab forward nonlinear function."""
     result = np.empty_like(t)

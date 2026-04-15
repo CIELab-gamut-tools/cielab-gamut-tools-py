@@ -33,6 +33,9 @@ class Gamut:
         self,
         lab: NDArray[np.floating],
         triangles: NDArray[np.integer],
+        *,
+        rgb: NDArray[np.floating] | None = None,
+        title: str | None = None,
     ) -> None:
         """
         Initialize a Gamut from CIELab coordinates and triangulation.
@@ -40,6 +43,9 @@ class Gamut:
         Args:
             lab: CIELab coordinates of surface points, shape (N, 3).
             triangles: Triangle vertex indices, shape (M, 3).
+            rgb: RGB coordinates of surface points, shape (N, 3), range [0, 1].
+                 Aligned with ``lab``. Used for primary colour indicators.
+            title: Human-readable gamut name shown in plot titles.
 
         Note:
             Most users should use the factory methods `from_cgats()` or
@@ -47,6 +53,8 @@ class Gamut:
         """
         self.lab = lab
         self.triangles = triangles
+        self.rgb = rgb
+        self.title = title
         self._volume: float | None = None
         self._cylindrical_map: NDArray[np.floating] | None = None
         self._cylmap_counts: NDArray[np.integer] | None = None
@@ -66,10 +74,12 @@ class Gamut:
             FileNotFoundError: If the file does not exist.
             ValueError: If the file format is invalid or missing required fields.
         """
+        import os
         from cielab_gamut_tools.io.cgats import read_cgats
 
         rgb, xyz, metadata = read_cgats(path)
-        return cls.from_xyz(rgb, xyz, metadata=metadata)
+        title = metadata.get("title") or os.path.splitext(os.path.basename(path))[0]
+        return cls.from_xyz(rgb, xyz, metadata=metadata, title=title)
 
     @classmethod
     def from_xyz(
@@ -78,6 +88,7 @@ class Gamut:
         xyz: NDArray[np.floating],
         *,
         metadata: dict | None = None,
+        title: str | None = None,
     ) -> Gamut:
         """
         Create a gamut from RGB and XYZ measurement data.
@@ -86,6 +97,7 @@ class Gamut:
             rgb: RGB values, shape (N, 3), range [0, 1] or [0, 255].
             xyz: Corresponding XYZ tristimulus values, shape (N, 3).
             metadata: Optional metadata dict (e.g., from CGATS file).
+            title: Human-readable gamut name shown in plot titles.
 
         Returns:
             A new Gamut instance.
@@ -110,7 +122,7 @@ class Gamut:
         # Convert to CIELab
         lab = xyz_to_lab(xyz_d50)
 
-        return cls(lab, triangles)
+        return cls(lab, triangles, rgb=rgb_surface, title=title)
 
     def volume(self) -> float:
         """
@@ -168,8 +180,8 @@ class Gamut:
     def plot_rings(
         self,
         reference: Gamut | SyntheticGamut | None = None,
-        l_rings: list[float] | None = None,
-        ax: Axes | None = None,
+        reference2: Gamut | SyntheticGamut | None = None,
+        **kwargs,
     ) -> Figure:
         """
         Create a 2D gamut rings plot in the a*-b* plane.
@@ -178,17 +190,17 @@ class Gamut:
         level, so the area enclosed equals the cumulative volume.
 
         Args:
-            reference: Optional reference gamut (outer ring shown dashed).
-            l_rings: Inner ring L* values (default: 10, 20, ..., 90).
-                     The outer ring at L*=100 is always included.
-            ax: Optional matplotlib Cartesian axes to plot on.
+            reference: Optional reference gamut.
+            reference2: Optional second reference gamut (outer ring only).
+            **kwargs: All other keyword arguments are forwarded to
+                ``plot_rings()`` — see that function for the full list.
 
         Returns:
             The matplotlib Figure containing the plot.
         """
         from cielab_gamut_tools.plotting.rings import plot_rings
 
-        return plot_rings(self, reference=reference, l_rings=l_rings, ax=ax)
+        return plot_rings(self, reference=reference, reference2=reference2, **kwargs)
 
 
 def _interpolate_xyz(

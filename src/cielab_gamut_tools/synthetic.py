@@ -52,6 +52,7 @@ class SyntheticGamut:
         primaries_xy: NDArray[np.floating],
         white_xy: NDArray[np.floating],
         gamma: float = 2.2,
+        title: str | None = None,
     ) -> None:
         """
         Create a synthetic gamut from primaries and white point.
@@ -60,32 +61,34 @@ class SyntheticGamut:
             primaries_xy: CIE xy chromaticity of RGB primaries, shape (3, 2).
             white_xy: CIE xy chromaticity of white point, shape (2,).
             gamma: Display gamma (default 2.2 for sRGB-like response).
+            title: Human-readable gamut name shown in plot titles.
         """
         self.primaries_xy = np.asarray(primaries_xy)
         self.white_xy = np.asarray(white_xy)
         self.gamma = gamma
+        self.title = title
 
         self._gamut: "Gamut | None" = None
 
     @classmethod
     def srgb(cls) -> SyntheticGamut:
         """Create an sRGB reference gamut (D65, gamma 2.2)."""
-        return cls(SRGB_PRIMARIES, D65_WHITE, gamma=2.2)
+        return cls(SRGB_PRIMARIES, D65_WHITE, gamma=2.2, title="sRGB")
 
     @classmethod
     def bt2020(cls) -> SyntheticGamut:
         """Create a BT.2020 reference gamut (D65, gamma 2.4)."""
-        return cls(BT2020_PRIMARIES, D65_WHITE, gamma=2.4)
+        return cls(BT2020_PRIMARIES, D65_WHITE, gamma=2.4, title="BT.2020")
 
     @classmethod
     def dci_p3(cls) -> SyntheticGamut:
         """Create a DCI-P3 reference gamut (DCI white, gamma 2.6)."""
-        return cls(DCI_P3_PRIMARIES, DCI_WHITE, gamma=2.6)
+        return cls(DCI_P3_PRIMARIES, DCI_WHITE, gamma=2.6, title="DCI-P3")
 
     @classmethod
     def display_p3(cls) -> SyntheticGamut:
         """Create a Display P3 reference gamut (D65 white, gamma 2.2)."""
-        return cls(DCI_P3_PRIMARIES, D65_WHITE, gamma=2.2)
+        return cls(DCI_P3_PRIMARIES, D65_WHITE, gamma=2.2, title="Display P3")
 
     def _build_gamut(self) -> "Gamut":
         """Build the underlying Gamut object."""
@@ -106,7 +109,7 @@ class SyntheticGamut:
         # Convert to CIELab
         lab = xyz_to_lab(xyz_d50)
 
-        return Gamut(lab, triangles)
+        return Gamut(lab, triangles, rgb=rgb_surface, title=self.title)
 
     def _rgb_to_xyz(self, rgb: NDArray[np.floating]) -> NDArray[np.floating]:
         """
@@ -146,9 +149,14 @@ class SyntheticGamut:
         """Create a 3D surface plot."""
         return self.gamut.plot_surface(**kwargs)
 
-    def plot_rings(self, **kwargs) -> "Figure":
-        """Create a 2D gamut rings plot."""
-        return self.gamut.plot_rings(**kwargs)
+    def plot_rings(
+        self,
+        reference=None,
+        reference2=None,
+        **kwargs,
+    ) -> "Figure":
+        """Create a 2D gamut rings plot. All kwargs forwarded to ``plot_rings()``."""
+        return self.gamut.plot_rings(reference=reference, reference2=reference2, **kwargs)
 
 
 def _build_rgb_to_xyz_matrix(
