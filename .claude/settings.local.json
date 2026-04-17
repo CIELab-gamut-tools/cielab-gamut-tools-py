@@ -16,7 +16,14 @@
       "Bash(wc -l /c/dev/IDMS/gamut-volume-py/src/cielab_gamut_tools/*.py /c/dev/IDMS/gamut-volume-py/src/cielab_gamut_tools/*/*.py)",
       "Bash(python -m pytest tests/ -v)",
       "Bash(.venvScriptspip install:*)",
-      "Bash(python -m pytest --tb=short -q)"
+      "Bash(python -m pytest --tb=short -q)",
+      "Bash(pandoc \"62977-3-5 CDV ver.1.3 \\(clean\\) 2022 03 03.docx\" -t plain --wrap=none)",
+      "Bash(pandoc \"62977-3-5 CDV ver.1.3 \\(clean\\) 2022 03 03.docx\" -t markdown --wrap=none -o /tmp/doc1.md)",
+      "Bash(echo \"Exit: $?\")",
+      "Read(//tmp/**)",
+      "Bash(python \"C:/dev/IDMS/gamut-volume-py/extract_doc.py\")",
+      "Bash(python \"C:/dev/IDMS/gamut-volume-py/extract_doc2.py\")",
+      "Bash(python \"C:/dev/IDMS/gamut-volume-py/check_doc2_end.py\")"
     ]
   }
 }

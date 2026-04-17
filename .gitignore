@@ -86,3 +86,6 @@ Thumbs.db
 
 # project reference docs
 standards
+
+# Agent
+.claude
