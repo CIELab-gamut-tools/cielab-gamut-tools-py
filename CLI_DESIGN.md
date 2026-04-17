@@ -2,16 +2,36 @@
 
 ## Overview
 
-Command-line interface for gamut analysis, visualization, and reporting. Designed for display professionals who need quick, scriptable, standards-compliant analysis.
+Command-line interface for gamut analysis, visualisation, and reporting. Designed for display
+professionals who need quick, scriptable, standards-compliant analysis.
+
+## Entry Points
+
+Two registered `console_scripts` pointing to the same entry point — no extra code, just two
+lines in `pyproject.toml`:
+
+| Command | Purpose |
+|---|---|
+| `cielab-gamut-tools` | Canonical name — used in documentation, standards citations, packaging |
+| `cielab-tools` | Short alias — everyday use |
+
+```toml
+# pyproject.toml
+[project.scripts]
+cielab-gamut-tools = "cielab_gamut_tools.cli:main"
+cielab-tools       = "cielab_gamut_tools.cli:main"
+```
+
+The web UI (when implemented) is launched via a subcommand: `cielab-tools ui`.
 
 ## Command Groups
 
 ```
-cielab-gamut
+cielab-tools
 ├── calculate     # Analysis and metrics
-├── plot          # Visualization (2D/3D)
+├── plot          # Visualisation (2D/3D)
 ├── generate      # Create reference gamuts and data
-├── report        # Automated report generation
+├── report        # [FUTURE] Automated report generation
 └── about         # Standards compliance and citation information
 ```
 
@@ -19,7 +39,7 @@ cielab-gamut
 
 ## 1. CALCULATE - Analysis and Metrics
 
-**Top-level command:** `cielab-gamut calculate <metric> <file> [options]`
+**Top-level command:** `cielab-tools calculate <metric> <file> [options]`
 
 ### Subcommands
 
@@ -28,21 +48,21 @@ Calculate gamut volume.
 
 ```bash
 # Basic volume
-cielab-gamut calculate volume display.txt
+cielab-tools calculate volume display.txt
 > Volume: 956234 (CIELab ΔE*ab units³)
 
 # Multiple files
-cielab-gamut calculate volume display1.txt display2.txt display3.txt
+cielab-tools calculate volume display1.txt display2.txt display3.txt
 > display1.txt: 956234
 > display2.txt: 892103
 > display3.txt: 1024567
 
 # With metadata output
-cielab-gamut calculate volume display.txt --json
+cielab-tools calculate volume display.txt --json
 > {"file": "display.txt", "volume": 956234, "unit": "deltaE_ab_cubed"}
 
 # Standards-compliant output
-cielab-gamut calculate volume display.txt --standard IEC --json
+cielab-tools calculate volume display.txt --standard IEC --json
 > {
 >   "file": "display.txt",
 >   "volume": 956234,
@@ -58,23 +78,23 @@ Calculate coverage of reference gamut(s).
 
 ```bash
 # sRGB coverage
-cielab-gamut calculate coverage display.txt --reference srgb
+cielab-tools calculate coverage display.txt --reference srgb
 > sRGB coverage: 98.3%
 > Display volume: 956234
-> sRGB volume: 830331
-> Intersection volume: 816236
+> sRGB volume:    830331
+> Intersection:   816236
 
 # Multiple references
-cielab-gamut calculate coverage display.txt --reference srgb,bt2020,dci-p3
-> sRGB coverage: 98.3%
+cielab-tools calculate coverage display.txt --reference srgb,bt2020,dci-p3
+> sRGB coverage:   98.3%
 > BT.2020 coverage: 67.2%
-> DCI-P3 coverage: 95.1%
+> DCI-P3 coverage:  95.1%
 
 # Custom reference from file
-cielab-gamut calculate coverage display.txt --reference custom.txt
+cielab-tools calculate coverage display.txt --reference custom.txt
 
 # Detailed output
-cielab-gamut calculate coverage display.txt --reference srgb --json --standard ICDM
+cielab-tools calculate coverage display.txt --reference srgb --json --standard ICDM
 ```
 
 #### `compare`
@@ -82,42 +102,25 @@ Compare multiple displays.
 
 ```bash
 # Compare volumes
-cielab-gamut calculate compare display1.txt display2.txt display3.txt
+cielab-tools calculate compare display1.txt display2.txt display3.txt
 > Gamut Comparison:
 > display1.txt: 956234
 > display2.txt: 892103 (-6.7% vs display1)
 > display3.txt: 1024567 (+7.2% vs display1)
 
-# Compare coverage
-cielab-gamut calculate compare display1.txt display2.txt --reference srgb
+# Compare coverage against a reference
+cielab-tools calculate compare display1.txt display2.txt --reference srgb
 > sRGB Coverage Comparison:
 > display1.txt: 98.3% (intersection: 816236)
 > display2.txt: 94.1% (intersection: 781420)
 
-# Matrix comparison (all pairwise)
-cielab-gamut calculate compare display1.txt display2.txt display3.txt --matrix
+# Matrix comparison (all pairwise intersections)
+cielab-tools calculate compare display1.txt display2.txt display3.txt --matrix
 > Pairwise Intersections:
 >              display1  display2  display3
 > display1         100%      89%      92%
 > display2          87%     100%      85%
 > display3          91%      88%     100%
-```
-
-#### `metrics`
-Calculate comprehensive metrics for standards compliance.
-
-```bash
-# All standard metrics
-cielab-gamut calculate metrics display.txt --standard IEC
-> Volume: 956234
-> Convex hull volume: 1023456 (convexity: 93.4%)
-> Surface area: 12345
-> sRGB coverage: 98.3%
-> BT.2020 coverage: 67.2%
-> ...
-
-# Specific metrics
-cielab-gamut calculate metrics display.txt --metrics volume,surface_area,coverage
 ```
 
 ### Common Options
@@ -131,7 +134,8 @@ cielab-gamut calculate metrics display.txt --metrics volume,surface_area,coverag
 
 ### Standards Compliance
 
-**All calculations are standards-compliant by design.** This implementation is based on the MATLAB reference code used in IEC and ICDM standards.
+**All calculations are standards-compliant by design.** This implementation is based on the
+MATLAB reference code used in IEC and ICDM standards.
 
 When `--standard` flag is used with output:
 - Adds standard version numbers to metadata
@@ -143,13 +147,13 @@ When `--standard` flag is used with output:
 - `IEC`: IEC 61966 series
 - `ICDM`: ICDM display metrology specifications
 
-For complete standards compliance information, use: `cielab-gamut about`
+For complete standards compliance information, use: `cielab-tools about`
 
 ---
 
-## 2. PLOT - Visualization
+## 2. PLOT - Visualisation
 
-**Top-level command:** `cielab-gamut plot <type> <file> [options]`
+**Top-level command:** `cielab-tools plot <type> <file> [options]`
 
 ### Subcommands
 
@@ -157,21 +161,21 @@ For complete standards compliance information, use: `cielab-gamut about`
 
 ```bash
 # Preview (opens window)
-cielab-gamut plot rings display.txt --show
+cielab-tools plot rings display.txt --show
 
 # Save to file
-cielab-gamut plot rings display.txt --output figure.png
+cielab-tools plot rings display.txt --output figure.png
 
 # With reference overlay
-cielab-gamut plot rings display.txt --reference srgb --output figure.eps --dpi 300
+cielab-tools plot rings display.txt --reference srgb --output figure.eps --dpi 300
 
 # Multiple L* slices
-cielab-gamut plot rings display.txt --slices 20,50,80 --reference srgb,bt2020 --output rings.pdf
+cielab-tools plot rings display.txt --slices 20,50,80 --reference srgb,bt2020 --output rings.pdf
 
 # Custom styling for publication
-cielab-gamut plot rings display.txt --reference srgb \
+cielab-tools plot rings display.txt --reference srgb \
   --style publication \
-  --colormap viridis \
+  --colourmap viridis \
   --labels "Test Display,sRGB" \
   --output figure.eps
 ```
@@ -180,22 +184,22 @@ cielab-gamut plot rings display.txt --reference srgb \
 
 ```bash
 # Interactive preview
-cielab-gamut plot surface display.txt --show
+cielab-tools plot surface display.txt --show
 
 # Fixed viewpoint for publication
-cielab-gamut plot surface display.txt \
+cielab-tools plot surface display.txt \
   --output surface.png \
   --elevation 30 \
   --azimuth 45 \
   --dpi 300
 
 # With reference overlay
-cielab-gamut plot surface display.txt --reference srgb \
+cielab-tools plot surface display.txt --reference srgb \
   --opacity 0.7 \
   --output comparison.png
 
 # Multiple displays
-cielab-gamut plot surface display1.txt display2.txt display3.txt \
+cielab-tools plot surface display1.txt display2.txt display3.txt \
   --labels "Display A,Display B,Display C" \
   --output multi_surface.png
 ```
@@ -204,14 +208,14 @@ cielab-gamut plot surface display1.txt display2.txt display3.txt \
 
 ```bash
 # Side-by-side rings at multiple L* slices
-cielab-gamut plot comparison display1.txt display2.txt \
+cielab-tools plot comparison display1.txt display2.txt \
   --type rings \
   --slices 20,50,80 \
   --layout grid \
   --output comparison.png
 
 # Overlay multiple gamuts
-cielab-gamut plot comparison display1.txt display2.txt display3.txt \
+cielab-tools plot comparison display1.txt display2.txt display3.txt \
   --type surface \
   --overlay \
   --opacity 0.5 \
@@ -225,7 +229,8 @@ cielab-gamut plot comparison display1.txt display2.txt display3.txt \
 - `--show`: Open interactive preview window
 - `--reference <gamut>`: Overlay reference gamut(s)
 - `--style <style>`: Style preset (default, publication, presentation)
-- `--colormap <cmap>`: Color scheme
+- `--colour/--color <cmap>`: Colour scheme (both spellings accepted)
+- `--colourmap/--colormap <cmap>`: Colour map (both spellings accepted)
 - `--labels <labels>`: Comma-separated labels for legend
 - `--title <title>`: Plot title
 - `--no-legend`: Hide legend
@@ -241,15 +246,12 @@ cielab-gamut plot comparison display1.txt display2.txt display3.txt \
 ### Style Presets
 
 **`publication`**: High-DPI, clean styling, vector formats preferred
-- Black/white backgrounds
-- Clear, thick lines
-- Standard scientific colormaps
+- White background, clear typography
+- Thick lines, standard scientific colormaps
 - Axis labels in standard font sizes
 
-**`presentation`**: Bold colors, clear from distance
-- High contrast
-- Larger fonts
-- Vibrant colors
+**`presentation`**: Bold colours, legible from distance
+- High contrast, larger fonts, vibrant colours
 
 **`default`**: Matplotlib defaults
 
@@ -257,47 +259,47 @@ cielab-gamut plot comparison display1.txt display2.txt display3.txt \
 
 ## 3. GENERATE - Create Reference Data
 
-**Top-level command:** `cielab-gamut generate <type> [options]`
+**Top-level command:** `cielab-tools generate <type> [options]`
 
 ### Subcommands
 
 #### `reference`
-Generate standard reference gamuts.
+Generate standard reference gamuts as CGATS files or pre-computed cylindrical maps.
 
 ```bash
-# Generate sRGB gamut data
-cielab-gamut generate reference srgb --output srgb.txt --format cgats
+# Generate sRGB gamut data as CGATS
+cielab-tools generate reference srgb --output srgb.txt --format cgats
 
 # Generate multiple references
-cielab-gamut generate reference srgb,bt2020,dci-p3 --output-dir ./references/
+cielab-tools generate reference srgb,bt2020,dci-p3 --output-dir ./references/
 
 # Custom reference
-cielab-gamut generate reference custom \
+cielab-tools generate reference custom \
   --primaries 0.68,0.32,0.265,0.69,0.15,0.06 \
   --white 0.3127,0.329 \
   --gamma 2.2 \
   --output custom_gamut.txt
 
 # Pre-calculated cylindrical map (for faster repeated calculations)
-cielab-gamut generate reference srgb --output srgb_cylmap.pkl --format cylmap
+cielab-tools generate reference srgb --output srgb_cylmap.pkl --format cylmap
 ```
 
 #### `test-pattern`
-Generate test measurement patterns for display characterization.
+Generate test measurement patterns for display characterisation.
 
 ```bash
 # Standard RGB cube sampling
-cielab-gamut generate test-pattern --points 729 --output test_pattern.txt
+cielab-tools generate test-pattern --points 729 --output test_pattern.txt
 
 # For specific measurement workflow
-cielab-gamut generate test-pattern --standard ICDM --output pattern.txt
+cielab-tools generate test-pattern --standard ICDM --output pattern.txt
 ```
 
 ### Options
 
 - `--output <file>`: Output file
 - `--output-dir <dir>`: Directory for multiple files
-- `--format <format>`: Output format (cgats, xyz, rgb, json, pkl)
+- `--format <format>`: Output format (cgats, json, cylmap)
 - `--primaries <x1,y1,x2,y2,x3,y3>`: RGB primary chromaticities
 - `--white <x,y>`: White point chromaticity
 - `--gamma <value>`: Gamma value
@@ -305,122 +307,36 @@ cielab-gamut generate test-pattern --standard ICDM --output pattern.txt
 
 ---
 
-## 4. REPORT - Automated Report Generation
+## 4. REPORT - Future Feature
 
-**Top-level command:** `cielab-gamut report <config> [files...]`
+> **Status: Not yet implemented. Planned for a future release.**
 
-### Report Configuration (YAML)
+The goal is to provide standardised, document-quality analysis reports combining computed
+metrics and publication-quality figures, driven by a YAML configuration file. Output formats
+under consideration include PDF, HTML, and Markdown.
 
-**Example: `standard_report.yaml`**
+The exact schema, template design, and output formats are TBD and will be informed by
+requirements from standards committee members and early users. The `report` command group is
+reserved in the CLI structure to avoid future breaking changes.
 
-```yaml
-# Standard Display Gamut Report
-report:
-  title: "Display Gamut Analysis Report"
-  standard: "IEC"  # IEC or ICDM compliance
+Anticipated capabilities:
+- YAML-configured reports (metrics + plots in one pass)
+- Batch processing across a directory of CGATS files
+- Built-in templates (quick, standard, publication, comparison)
+- Standards-compliant metadata in output
 
-  # Calculations to perform
-  calculations:
-    - metric: volume
-      format: "Volume: {value:.0f} ΔE*ab³"
+---
 
-    - metric: coverage
-      references: [srgb, bt2020, dci-p3]
-      format: "{ref} coverage: {value:.1f}%"
+## 5. UI - Web Interface
 
-    - metric: metrics
-      items: [volume, surface_area, convexity]
-
-  # Plots to include
-  plots:
-    - type: rings
-      slices: [20, 50, 80]
-      references: [srgb, bt2020]
-      style: publication
-      dpi: 300
-      caption: "Gamut boundaries at L*=20, 50, and 80"
-
-    - type: surface
-      references: [srgb]
-      elevation: 30
-      azimuth: 45
-      dpi: 300
-      caption: "3D gamut surface with sRGB reference"
-
-  # Output settings
-  output:
-    format: pdf  # pdf, html, markdown
-    filename: "{basename}_report.{ext}"  # template
-    include_metadata: true
-    include_timestamp: true
-```
-
-### Usage
+> **Status: Not yet implemented. Planned for a future release.**
 
 ```bash
-# Single file
-cielab-gamut report standard_report.yaml display.txt
-
-# Multiple files (batch processing)
-cielab-gamut report standard_report.yaml display1.txt display2.txt display3.txt
-
-# File pattern (glob)
-cielab-gamut report standard_report.yaml "measurements/*.txt"
-
-# Output to directory
-cielab-gamut report standard_report.yaml "*.txt" --output-dir ./reports/
-
-# Override config options
-cielab-gamut report standard_report.yaml display.txt \
-  --format html \
-  --title "Custom Display Report"
+cielab-tools ui          # launches browser-based interface on localhost
 ```
 
-### Batch Processing
-
-```bash
-# Process all CGATS files in directory
-cielab-gamut report standard_report.yaml "measurements/*.txt" --output-dir reports/
-
-# With parallel processing
-cielab-gamut report standard_report.yaml "*.txt" --jobs 4
-
-# Generate summary across all files
-cielab-gamut report standard_report.yaml "*.txt" --summary summary.pdf
-```
-
-### Report Output Formats
-
-**PDF**: Professional reports with embedded figures
-- LaTeX-quality typesetting
-- Vector graphics embedded
-- Multi-page support
-
-**HTML**: Interactive reports
-- Embedded plots
-- Responsive layout
-- Can include interactive plots (plotly)
-
-**Markdown**: Simple text reports
-- Easy to convert to other formats
-- Version control friendly
-- Can be rendered by GitHub, etc.
-
-### Report Templates
-
-Provide standard templates:
-- `quick`: Volume and sRGB coverage only
-- `standard`: Comprehensive analysis with key plots
-- `publication`: High-quality figures and detailed metrics
-- `comparison`: Compare multiple displays side-by-side
-
-```bash
-# Use built-in template
-cielab-gamut report --template standard display.txt
-
-# List available templates
-cielab-gamut report --list-templates
-```
+See `ARCHITECTURE.md` for the proposed design (FastAPI + Vue 3 + Plotly.js for interactive
+display, matplotlib for publication export).
 
 ---
 
@@ -431,7 +347,7 @@ cielab-gamut report --list-templates
 Display detailed information about the tool, standards compliance, and citation.
 
 ```bash
-cielab-gamut about
+cielab-tools about
 
 > cielab-gamut-tools 1.0.0
 >
@@ -481,16 +397,12 @@ default_standard: IEC
 plot:
   default_style: publication
   default_dpi: 300
-  default_colormap: viridis
+  default_colourmap: viridis
 
 # Calculation defaults
 calculate:
   precision: 1
   output_format: text
-
-# Report defaults
-report:
-  output_format: pdf
 ```
 
 ---
@@ -499,7 +411,7 @@ report:
 
 ### CLI Framework: Typer
 - Type-safe with auto-generated help
-- Subcommand groups map cleanly to our structure
+- Subcommand groups map cleanly to this structure
 - Excellent error messages
 
 ### Language and Spelling
@@ -509,54 +421,63 @@ report:
 - All output (especially with `--standard` flag) must use British spelling:
   - "colour" not "color"
   - "analyse" not "analyze"
-  - "metres" not "meters"
+  - "characterisation" not "characterization"
 - **Input parameters**: Accept BOTH spellings for user convenience
   - `--color`/`--colour`
   - `--colormap`/`--colourmap`
-- Implementation: Use aliases for CLI arguments, internal/output uses British English
+- Implementation: Use Typer aliases for CLI arguments; internal strings and output use
+  British English
 
 ### Standards List Maintenance
 
 The list of compliant standards will be maintained in a central location:
-- **Primary source**: `STANDARDS.md` or `COMPLIANCE.md` in repository root
+- **Primary source**: `STANDARDS.md` in repository root
 - **Metadata**: Also in `pyproject.toml` for packaging
-- **Runtime access**: Both `about` command and `--standard` metadata read from same source
+- **Runtime access**: `about` command and `--standard` metadata read from the same source
 - **Updates**: Standards list to be provided by standards committee members
 
 ### Dependencies
-- **Core**: numpy, scipy, matplotlib, numba (already have)
-- **CLI**: typer, rich (for pretty terminal output)
-- **Reports**: reportlab (PDF) or weasyprint (HTML→PDF)
+
+- **Core**: numpy, scipy, matplotlib, numba (already present)
+- **CLI**: typer, rich (pretty terminal output)
 - **Config**: pyyaml
+- **UI** *(optional extra)*: fastapi, uvicorn — `pip install cielab-gamut-tools[ui]`
+- **Reports** *(future)*: TBD — candidates include reportlab, weasyprint
 
 ### File Format Support
 
 **Input:**
 - CGATS.17 (current)
 - IDMS v1.3 (current)
-- Raw XYZ/RGB (to add)
-- JSON (to add)
+- Raw XYZ/RGB (planned)
+- JSON (planned)
 
 **Output:**
 - Text (human-readable)
 - JSON (machine-readable, standards-compliant)
 - CSV (spreadsheet-friendly)
-- CGATS (for interchange)
 
 ---
 
-## Examples Workflow
+## Example Workflows
 
 ### Quick Analysis
 ```bash
 # Just need volume
-cielab-gamut calculate volume display.txt
+cielab-tools calculate volume display.txt
+```
+
+### Scripting
+```bash
+# Get just the volume value
+volume=$(cielab-tools calculate volume display.txt --quiet)
+echo "Measured volume: $volume"
 ```
 
 ### Publication Figure
 ```bash
 # High-quality gamut rings
-cielab-gamut plot rings display.txt \
+cielab-tools plot rings display.txt \
   --reference srgb,bt2020 \
   --style publication \
   --output figure1.eps \
@@ -564,23 +485,12 @@ cielab-gamut plot rings display.txt \
   --labels "Test Display,sRGB,BT.2020"
 ```
 
-### Standards Compliance Report
+### Batch Coverage Table
 ```bash
-# IEC-compliant report
-cielab-gamut report --template standard display.txt --standard IEC
-```
-
-### Batch Processing
-```bash
-# Analyze all displays in a directory
-cielab-gamut report standard_report.yaml "displays/*.txt" --output-dir reports/
-```
-
-### Scripting
-```bash
-# Get just the volume value for scripting
-volume=$(cielab-gamut calculate volume display.txt --quiet)
-echo "Measured volume: $volume"
+# JSON output piped to jq for further processing
+for f in displays/*.txt; do
+  cielab-tools calculate coverage "$f" --reference srgb,bt2020,dci-p3 --json
+done
 ```
 
 ---
@@ -595,20 +505,18 @@ echo "Measured volume: $volume"
 2. **Implement CLI structure**
    - Set up Typer with command groups
    - Implement `about` command
-   - Implement `calculate` commands first (leverage existing code)
-   - Add `plot` commands (wrap existing plotting)
-   - Implement `generate` for references
-   - Build `report` system with YAML config
+   - Implement `calculate volume`, `calculate coverage`, `calculate compare`
+   - Add `plot rings` and `plot surface` (wrap existing plotting code)
+   - Add `generate reference`
 
 3. **Testing**
    - Unit tests for each CLI command
-   - Integration tests with sample files
-   - Verify metadata output includes correct standard information
+   - Integration tests with sample CGATS files
+   - Verify `--standard` metadata output is correct
 
 4. **Documentation**
    - Update README with CLI examples
    - Create user guide
-   - Add example reports and configs
    - Document British English conventions
 
 ---
@@ -618,19 +526,14 @@ echo "Measured volume: $volume"
 1. **Standards list**: Please provide the official list of compliant standards with:
    - Full standard names and version numbers (e.g., "IEC 61966-2-1:2024")
    - Brief description of what each standard covers
-   - Any specific input data requirements
+   - Any specific input data requirements per standard
 
-2. **Report formats**: PDF sufficient, or need Word/Excel output?
+2. **Report formats** *(for future planning)*: When the `report` command is designed, are
+   PDF and HTML sufficient, or is Word/Excel output needed for committee workflows?
 
-3. **Batch processing**: Any specific workflow needs (e.g., watching a directory, integration with measurement software)?
+3. **Batch processing**: Any specific workflow needs beyond glob patterns (e.g., watching a
+   directory for new files, integration with measurement instrument software)?
 
-4. **Additional metrics**: Beyond volume and coverage, what other calculations are important?
-   - Surface area?
-   - Convexity ratio?
-   - Per-region analysis (shadows, midtones, highlights)?
-   - Gamut volume under specific illuminants?
-   - Any metrics specific to emissive vs. reflective displays?
-
-5. **Pre-calculated data**: Would cached cylindrical maps for standard references speed up common operations significantly?
-
-6. **Interactive features**: Any need for interactive HTML reports with embedded plotly plots?
+4. **Pre-calculated data**: Would shipping bundled cylindrical maps for the standard
+   references (sRGB, BT.2020, DCI-P3) meaningfully speed up common operations for users
+   who always compare against the same references?
