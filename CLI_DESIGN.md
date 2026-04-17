@@ -30,7 +30,7 @@ The web UI (when implemented) is launched via a subcommand: `cielab-tools ui`.
 cielab-tools
 ├── calculate     # Analysis and metrics
 ├── plot          # Visualisation (2D/3D)
-├── generate      # Create reference gamuts and data
+├── generate      # Create reference gamuts and test patterns
 ├── report        # [FUTURE] Automated report generation
 └── about         # Standards compliance and citation information
 ```
@@ -49,27 +49,34 @@ Calculate gamut volume.
 ```bash
 # Basic volume
 cielab-tools calculate volume display.txt
-> Volume: 956234 (CIELab ΔE*ab units³)
+> Volume: 956 234 (ΔE*ab)³
 
-# Multiple files
+# Multiple files — tabulated output
 cielab-tools calculate volume display1.txt display2.txt display3.txt
-> display1.txt: 956234
-> display2.txt: 892103
-> display3.txt: 1024567
+> File          Volume (ΔE*ab)³
+> display1.txt      956 234
+> display2.txt      892 103
+> display3.txt    1 024 567
 
-# With metadata output
+# CSV output (for Excel / spreadsheet workflows)
+cielab-tools calculate volume display1.txt display2.txt --format csv
+> file,volume_dEab3
+> display1.txt,956234
+> display2.txt,892103
+
+# JSON with metadata
 cielab-tools calculate volume display.txt --json
 > {"file": "display.txt", "volume": 956234, "unit": "deltaE_ab_cubed"}
 
-# Standards-compliant output
-cielab-tools calculate volume display.txt --standard IEC --json
+# Standards-compliant JSON output
+cielab-tools calculate volume display.txt --standard IDMS --json
 > {
 >   "file": "display.txt",
 >   "volume": 956234,
 >   "unit": "deltaE_ab_cubed",
->   "standard": "IEC 61966-2-1:2024",
+>   "standard": "ICDM IDMS v1.3 §5.32.1",
 >   "method": "cylindrical_integration",
->   "calculated": "2026-04-16T10:23:45Z"
+>   "calculated": "2026-04-17T10:23:45Z"
 > }
 ```
 
@@ -80,21 +87,29 @@ Calculate coverage of reference gamut(s).
 # sRGB coverage
 cielab-tools calculate coverage display.txt --reference srgb
 > sRGB coverage: 98.3%
-> Display volume: 956234
-> sRGB volume:    830331
-> Intersection:   816236
+> Display volume:     956 234 (ΔE*ab)³
+> sRGB volume:        830 331 (ΔE*ab)³
+> Intersection:       816 236 (ΔE*ab)³
 
 # Multiple references
-cielab-tools calculate coverage display.txt --reference srgb,bt2020,dci-p3
-> sRGB coverage:   98.3%
-> BT.2020 coverage: 67.2%
-> DCI-P3 coverage:  95.1%
+cielab-tools calculate coverage display.txt --reference srgb,bt2020,dci-p3,adobe-rgb
+> sRGB coverage:      98.3%
+> BT.2020 coverage:   67.2%
+> DCI-P3 coverage:    95.1%
+> Adobe RGB coverage: 88.4%
+
+# CSV output
+cielab-tools calculate coverage display.txt --reference srgb,bt2020,dci-p3 --format csv
+> reference,coverage_pct,dut_volume,ref_volume,intersection_volume
+> sRGB,98.3,956234,830331,816236
+> BT.2020,67.2,956234,1389765,642876
+> DCI-P3,95.1,956234,924832,879955
 
 # Custom reference from file
-cielab-tools calculate coverage display.txt --reference custom.txt
+cielab-tools calculate coverage display.txt --reference custom_ref.txt
 
-# Detailed output
-cielab-tools calculate coverage display.txt --reference srgb --json --standard ICDM
+# Detailed JSON output
+cielab-tools calculate coverage display.txt --reference srgb --json --standard IEC-62977
 ```
 
 #### `compare`
@@ -104,50 +119,63 @@ Compare multiple displays.
 # Compare volumes
 cielab-tools calculate compare display1.txt display2.txt display3.txt
 > Gamut Comparison:
-> display1.txt: 956234
-> display2.txt: 892103 (-6.7% vs display1)
-> display3.txt: 1024567 (+7.2% vs display1)
+> display1.txt: 956 234
+> display2.txt: 892 103  (−6.7% vs display1)
+> display3.txt: 1 024 567 (+7.2% vs display1)
+
+# CSV output
+cielab-tools calculate compare display1.txt display2.txt display3.txt --format csv
+> file,volume_dEab3,delta_pct_vs_first
+> display1.txt,956234,0.0
+> display2.txt,892103,-6.7
+> display3.txt,1024567,7.2
 
 # Compare coverage against a reference
 cielab-tools calculate compare display1.txt display2.txt --reference srgb
 > sRGB Coverage Comparison:
-> display1.txt: 98.3% (intersection: 816236)
-> display2.txt: 94.1% (intersection: 781420)
+> display1.txt: 98.3%  (intersection: 816 236)
+> display2.txt: 94.1%  (intersection: 781 420)
 
 # Matrix comparison (all pairwise intersections)
 cielab-tools calculate compare display1.txt display2.txt display3.txt --matrix
-> Pairwise Intersections:
+> Pairwise Intersections (% of row gamut covered by column):
 >              display1  display2  display3
 > display1         100%      89%      92%
 > display2          87%     100%      85%
 > display3          91%      88%     100%
+
+# Matrix as CSV
+cielab-tools calculate compare display1.txt display2.txt display3.txt --matrix --format csv
 ```
 
 ### Common Options
 
-- `--output <file>`: Write results to file (CSV, JSON, or TXT)
-- `--format <format>`: Output format (text, json, csv)
-- `--standard <standard>`: Compliance standard (IEC, ICDM)
-- `--reference <gamut>`: Reference gamut(s) (srgb, bt2020, dci-p3, display-p3, or file path)
-- `--precision <n>`: Decimal places for output (default: 1)
-- `--quiet`: Only output values (for scripting)
+- `--output <file>`: Write results to file (inferred format from extension, or use `--format`)
+- `--format <format>`: Output format: `text` (default), `json`, `csv`
+- `--standard <std>`: Append standards traceability metadata — see [Standards Compliance](#standards-compliance)
+- `--reference <gamut>`: Reference gamut(s): `srgb`, `bt2020`, `dci-p3`, `display-p3`,
+  `adobe-rgb`, or a path to a CGATS file
+- `--precision <n>`: Decimal places for numeric output (default: 1)
+- `--quiet`: Output values only, no labels (for scripting/piping)
 
 ### Standards Compliance
 
-**All calculations are standards-compliant by design.** This implementation is based on the
-MATLAB reference code used in IEC and ICDM standards.
+**All calculations are standards-compliant by design.** This implementation is the Python
+port of the MATLAB reference code on which the following standards are based:
 
-When `--standard` flag is used with output:
-- Adds standard version numbers to metadata
-- Includes traceability information (standard name, method, calculation timestamp)
-- JSON output includes full compliance documentation
-- Warnings if input data doesn't meet standard requirements (e.g., measurement density, white point)
+| Flag value | Standard |
+|---|---|
+| `IDMS` | ICDM Information Display Measurements Standard v1.3, §5.32 |
+| `IEC-62977` | IEC 62977-3-5 — Electronic displays: Colour capabilities |
+| `IEC-62906` | IEC 62906-6-1 — Displays: Colour gamut intersection visualisation |
 
-**Supported standards** (to be documented from standards committee work):
-- `IEC`: IEC 61966 series
-- `ICDM`: ICDM display metrology specifications
+When `--standard` is supplied:
+- Adds the full standard name and version to output metadata
+- Includes method, calculation timestamp, and algorithm reference
+- JSON output provides a complete traceability record
+- Warns if input data does not meet standard requirements (e.g. fewer than 602 patches)
 
-For complete standards compliance information, use: `cielab-tools about`
+For complete standards compliance information: `cielab-tools about`
 
 ---
 
@@ -157,7 +185,11 @@ For complete standards compliance information, use: `cielab-tools about`
 
 ### Subcommands
 
-#### `rings` (2D gamut boundaries at L* slices)
+#### `rings` (2D gamut boundaries at L* slices — gamut ring diagram)
+
+The gamut ring diagram is a normative visualisation defined in IDMS §5.32.3 and
+IEC 62906-6-1. Each ring represents the gamut boundary at a 10-unit L* interval; ring area
+is proportional to gamut volume for that slice.
 
 ```bash
 # Preview (opens window)
@@ -169,18 +201,18 @@ cielab-tools plot rings display.txt --output figure.png
 # With reference overlay
 cielab-tools plot rings display.txt --reference srgb --output figure.eps --dpi 300
 
-# Multiple L* slices
-cielab-tools plot rings display.txt --slices 20,50,80 --reference srgb,bt2020 --output rings.pdf
+# Intersection rendering (reference in grey, DUT intersection highlighted)
+cielab-tools plot rings display.txt --reference srgb --mode intersection --output rings.pdf
 
-# Custom styling for publication
-cielab-tools plot rings display.txt --reference srgb \
+# Multiple references, publication style
+cielab-tools plot rings display.txt --reference srgb,bt2020 \
   --style publication \
   --colourmap viridis \
-  --labels "Test Display,sRGB" \
+  --labels "Test Display,sRGB,BT.2020" \
   --output figure.eps
 ```
 
-#### `surface` (3D gamut surface)
+#### `surface` (3D gamut surface in CIELab)
 
 ```bash
 # Interactive preview
@@ -204,17 +236,16 @@ cielab-tools plot surface display1.txt display2.txt display3.txt \
   --output multi_surface.png
 ```
 
-#### `comparison` (Side-by-side or overlay comparison)
+#### `comparison` (Side-by-side or overlay)
 
 ```bash
-# Side-by-side rings at multiple L* slices
+# Side-by-side rings
 cielab-tools plot comparison display1.txt display2.txt \
   --type rings \
-  --slices 20,50,80 \
   --layout grid \
   --output comparison.png
 
-# Overlay multiple gamuts
+# Overlay multiple surfaces
 cielab-tools plot comparison display1.txt display2.txt display3.txt \
   --type surface \
   --overlay \
@@ -225,30 +256,31 @@ cielab-tools plot comparison display1.txt display2.txt display3.txt \
 ### Common Options
 
 - `--output <file>`: Output file (png, pdf, eps, svg, tiff)
-- `--dpi <n>`: Resolution for raster formats (default: 150, publication: 300-600)
+- `--dpi <n>`: Resolution for raster formats (default: 150; publication: 300–600)
 - `--show`: Open interactive preview window
 - `--reference <gamut>`: Overlay reference gamut(s)
-- `--style <style>`: Style preset (default, publication, presentation)
-- `--colour/--color <cmap>`: Colour scheme (both spellings accepted)
-- `--colourmap/--colormap <cmap>`: Colour map (both spellings accepted)
-- `--labels <labels>`: Comma-separated labels for legend
+- `--mode <mode>`: Ring diagram mode: `outline` (default), `intersection`,
+  `intersection-borders`
+- `--style <style>`: Style preset: `default`, `publication`, `presentation`
+- `--colour/--color`: Colour scheme (both spellings accepted)
+- `--colourmap/--colormap <cmap>`: Colour map
+- `--labels <labels>`: Comma-separated legend labels
 - `--title <title>`: Plot title
 - `--no-legend`: Hide legend
-- `--figsize <w,h>`: Figure size in inches (e.g., 8,6)
+- `--figsize <w,h>`: Figure size in inches (e.g. `8,6`)
 
 ### 3D Plot Specific Options
 
 - `--elevation <deg>`: Camera elevation angle (default: 30)
 - `--azimuth <deg>`: Camera azimuth angle (default: 45)
-- `--opacity <val>`: Surface opacity 0-1 (default: 0.8)
-- `--wireframe`: Render as wireframe instead of solid surface
+- `--opacity <val>`: Surface opacity 0–1 (default: 0.8)
+- `--wireframe`: Render as wireframe
 
 ### Style Presets
 
 **`publication`**: High-DPI, clean styling, vector formats preferred
-- White background, clear typography
-- Thick lines, standard scientific colormaps
-- Axis labels in standard font sizes
+- White background, clear typography, thick lines, standard scientific colormaps
+- Axis labels at standard font sizes
 
 **`presentation`**: Bold colours, legible from distance
 - High contrast, larger fonts, vibrant colours
@@ -263,47 +295,71 @@ cielab-tools plot comparison display1.txt display2.txt display3.txt \
 
 ### Subcommands
 
-#### `reference`
-Generate standard reference gamuts as CGATS files or pre-computed cylindrical maps.
+#### `test-pattern`
+Generate the RGB input signal values for display measurement, as specified in IDMS §5.32
+(Code 1: `make_rgb_signals.m`). Output is a list of RGB values to programme into the
+measurement instrument or test pattern generator.
 
 ```bash
-# Generate sRGB gamut data as CGATS
-cielab-tools generate reference srgb --output srgb.txt --format cgats
+# Standard 602-point reference set (11×11 grid per face, m=11)
+cielab-tools generate test-pattern --output test_pattern.txt
+
+# Smaller sets (with caution — results must be reported as estimates)
+cielab-tools generate test-pattern --grid 9   # 386 points (9×9, m=9)
+cielab-tools generate test-pattern --grid 7   # 218 points (7×7, m=7)
+cielab-tools generate test-pattern --grid 5   # 98 points  (5×5, m=5)
+
+# Specify bit depth (default: 8-bit, 0–255)
+cielab-tools generate test-pattern --grid 11 --bits 10 --output pattern_10bit.txt
+
+# CSV output (for import into measurement software)
+cielab-tools generate test-pattern --format csv --output pattern.csv
+```
+
+**Note:** The 602-point set (m=11) is the normative reference. Smaller sets introduce
+additional uncertainty. If a smaller set is measured, XYZ interpolation to 602 points must
+be performed before analysis — see `generate interpolate`.
+
+#### `reference`
+Generate a reference gamut as a CGATS gamut envelope file (Lab values), or the corresponding
+synthetic XYZ measurements. Uses `SyntheticGamut` to compute perfectly ideal primaries.
+
+```bash
+# Generate sRGB gamut envelope (Lab CGATS — the standard output format)
+cielab-tools generate reference srgb --output srgb_envelope.txt
 
 # Generate multiple references
-cielab-tools generate reference srgb,bt2020,dci-p3 --output-dir ./references/
+cielab-tools generate reference srgb,bt2020,dci-p3,display-p3,adobe-rgb \
+  --output-dir ./references/
 
-# Custom reference
+# Custom reference from primaries
 cielab-tools generate reference custom \
   --primaries 0.68,0.32,0.265,0.69,0.15,0.06 \
   --white 0.3127,0.329 \
   --gamma 2.2 \
-  --output custom_gamut.txt
+  --output custom_envelope.txt
+
+# Generate synthetic XYZ measurements (input-side CGATS, before Lab conversion)
+cielab-tools generate reference srgb --format xyz --output srgb_xyz.txt
 
 # Pre-calculated cylindrical map (for faster repeated calculations)
-cielab-tools generate reference srgb --output srgb_cylmap.pkl --format cylmap
+cielab-tools generate reference srgb --format cylmap --output srgb_cylmap.pkl
 ```
 
-#### `test-pattern`
-Generate test measurement patterns for display characterisation.
-
-```bash
-# Standard RGB cube sampling
-cielab-tools generate test-pattern --points 729 --output test_pattern.txt
-
-# For specific measurement workflow
-cielab-tools generate test-pattern --standard ICDM --output pattern.txt
-```
+**Output format:** Default is a CGATS 17 gamut envelope file containing CIELab D50
+coordinates — the device-independent format defined by IDMS §5.32 (Code 5). This file
+can be used directly as a `--reference` argument in `calculate` and `plot` commands.
 
 ### Options
 
 - `--output <file>`: Output file
 - `--output-dir <dir>`: Directory for multiple files
-- `--format <format>`: Output format (cgats, json, cylmap)
-- `--primaries <x1,y1,x2,y2,x3,y3>`: RGB primary chromaticities
+- `--format <format>`: Output format: `cgats` (default), `xyz`, `csv`, `cylmap`
+- `--grid <m>`: Grid divisions per edge for test pattern (default: 11 → 602 points)
+- `--bits <n>`: Signal bit depth for test pattern (default: 8)
+- `--primaries <x1,y1,x2,y2,x3,y3>`: RGB primary chromaticities (xy)
 - `--white <x,y>`: White point chromaticity
 - `--gamma <value>`: Gamma value
-- `--points <n>`: Number of points for test pattern
 
 ---
 
@@ -323,7 +379,7 @@ Anticipated capabilities:
 - YAML-configured reports (metrics + plots in one pass)
 - Batch processing across a directory of CGATS files
 - Built-in templates (quick, standard, publication, comparison)
-- Standards-compliant metadata in output
+- Standards-compliant metadata embedded in output
 
 ---
 
@@ -344,7 +400,7 @@ display, matplotlib for publication export).
 
 ### `about` Command
 
-Display detailed information about the tool, standards compliance, and citation.
+Display information about the tool, standards compliance, and citation.
 
 ```bash
 cielab-tools about
@@ -352,21 +408,26 @@ cielab-tools about
 > cielab-gamut-tools 1.0.0
 >
 > Python implementation of CIELab gamut volume calculation.
-> Port of the MATLAB reference implementation used in IEC and ICDM standards.
+> Port of the MATLAB reference implementation on which the following
+> IEC TC110 and ICDM standards are based.
 >
 > Standards Compliance:
->   • IEC 61966-2-1:2024 - sRGB colour space
->   • IEC 61966-9:2024 - Gamut volume calculation methodology
->   • ICDM v1.3 - Display measurement and characterisation
->   [Additional standards to be documented]
+>   • ICDM Information Display Measurements Standard (IDMS) v1.3, §5.32
+>     Color Gamut Envelope — Color Capability
+>   • IEC 62977-3-5 — Electronic displays:
+>     Evaluation of optical performance — Colour capabilities
+>   • IEC 62906-6-1 — Displays:
+>     Colour gamut intersection visualisation method
+>   [Final publication numbers subject to IEC TC110 ballot]
 >
 > Citation:
 >   Smith, E., et al. (2020). "Gamut volume calculation for display
 >   colour characterisation." Journal of the Society for Information Display.
 >
-> Algorithm Reference:
->   Based on MATLAB reference implementation (cielab-gamut-tools-m)
->   Method: Cylindrical integration in CIELab space
+> Algorithm:
+>   Cylindrical integration in CIELab space via Möller-Trumbore
+>   ray-triangle intersection. Bradford chromatic adaptation to D50.
+>   Reference implementation: cielab-gamut-tools-m (MATLAB/Octave).
 >
 > Repository: https://github.com/CIELab-gamut-tools/cielab-gamut-tools-py
 > Documentation: https://cielab-gamut-tools.readthedocs.io
@@ -376,7 +437,7 @@ cielab-tools about
 ### Global Options (All Commands)
 
 - `--verbose, -v`: Verbose output during execution
-- `--quiet, -q`: Minimal output (values only, for scripting)
+- `--quiet, -q`: Minimal output — values only, for scripting
 - `--version`: Show version number only
 - `--help, -h`: Show help
 
@@ -391,7 +452,7 @@ cielab-tools about
 default_references: [srgb, bt2020]
 
 # Default standard
-default_standard: IEC
+default_standard: IDMS
 
 # Plot defaults
 plot:
@@ -410,9 +471,9 @@ calculate:
 ## Implementation Notes
 
 ### CLI Framework: Typer
-- Type-safe with auto-generated help
+- Type-safe with auto-generated help text
 - Subcommand groups map cleanly to this structure
-- Excellent error messages
+- Excellent error messages; plays well with `rich` for formatted output
 
 ### Language and Spelling
 
@@ -422,24 +483,31 @@ calculate:
   - "colour" not "color"
   - "analyse" not "analyze"
   - "characterisation" not "characterization"
-- **Input parameters**: Accept BOTH spellings for user convenience
+- **Input parameters**: Accept BOTH spellings for user convenience via Typer aliases:
   - `--color`/`--colour`
   - `--colormap`/`--colourmap`
-- Implementation: Use Typer aliases for CLI arguments; internal strings and output use
-  British English
 
-### Standards List Maintenance
+### Standards Traceability
 
-The list of compliant standards will be maintained in a central location:
-- **Primary source**: `STANDARDS.md` in repository root
-- **Metadata**: Also in `pyproject.toml` for packaging
-- **Runtime access**: `about` command and `--standard` metadata read from the same source
-- **Updates**: Standards list to be provided by standards committee members
+The list of compliant standards is maintained in `STANDARDS.md` in the repository root.
+Both the `about` command and `--standard` metadata read from the same source. Version numbers
+and scope statements are to be confirmed with the relevant standards committees (IEC TC110,
+ICDM) once final publication occurs.
+
+### Named Reference Gamuts
+
+| ID | Full name | White point |
+|---|---|---|
+| `srgb` | IEC sRGB / BT.709 | D65 |
+| `bt2020` | ITU-R BT.2020 | D65 |
+| `dci-p3` | DCI-P3 | DCI white (0.314, 0.351) |
+| `display-p3` | Display P3 | D65 |
+| `adobe-rgb` | Adobe RGB (1998) | D65 |
 
 ### Dependencies
 
 - **Core**: numpy, scipy, matplotlib, numba (already present)
-- **CLI**: typer, rich (pretty terminal output)
+- **CLI**: typer, rich
 - **Config**: pyyaml
 - **UI** *(optional extra)*: fastapi, uvicorn — `pip install cielab-gamut-tools[ui]`
 - **Reports** *(future)*: TBD — candidates include reportlab, weasyprint
@@ -447,15 +515,15 @@ The list of compliant standards will be maintained in a central location:
 ### File Format Support
 
 **Input:**
-- CGATS.17 (current)
-- IDMS v1.3 (current)
+- CGATS.17 format 2 (current) — XYZ measurements or Lab gamut envelope
+- IDMS v1.3 variant (current)
 - Raw XYZ/RGB (planned)
-- JSON (planned)
 
 **Output:**
+- CGATS.17 format 2 (planned — needed for `generate reference` and interop)
 - Text (human-readable)
-- JSON (machine-readable, standards-compliant)
-- CSV (spreadsheet-friendly)
+- JSON (machine-readable, standards-compliant metadata)
+- CSV (spreadsheet / Excel compatible)
 
 ---
 
@@ -463,77 +531,95 @@ The list of compliant standards will be maintained in a central location:
 
 ### Quick Analysis
 ```bash
-# Just need volume
+# Volume only
 cielab-tools calculate volume display.txt
+
+# Volume, scripting-friendly
+volume=$(cielab-tools calculate volume display.txt --quiet)
+echo "Volume: $volume"
 ```
 
-### Scripting
+### Coverage Table for Excel
 ```bash
-# Get just the volume value
-volume=$(cielab-tools calculate volume display.txt --quiet)
-echo "Measured volume: $volume"
+# Single display against all standard references, CSV to file
+cielab-tools calculate coverage display.txt \
+  --reference srgb,bt2020,dci-p3,adobe-rgb \
+  --format csv \
+  --output coverage.csv
+```
+
+### Batch Volume Survey
+```bash
+# All CGATS files in a directory → CSV summary
+for f in displays/*.txt; do
+  cielab-tools calculate volume "$f" --format csv --quiet
+done > all_volumes.csv
 ```
 
 ### Publication Figure
 ```bash
-# High-quality gamut rings
+# High-quality gamut ring diagram
 cielab-tools plot rings display.txt \
   --reference srgb,bt2020 \
   --style publication \
+  --mode intersection \
   --output figure1.eps \
   --dpi 600 \
   --labels "Test Display,sRGB,BT.2020"
 ```
 
-### Batch Coverage Table
+### Generate Measurement Pattern
 ```bash
-# JSON output piped to jq for further processing
-for f in displays/*.txt; do
-  cielab-tools calculate coverage "$f" --reference srgb,bt2020,dci-p3 --json
-done
+# Generate the 602 RGB values to measure on the display
+cielab-tools generate test-pattern --format csv --output patch_list.csv
+
+# After measurement, calculate the gamut envelope
+cielab-tools generate reference srgb --output srgb_ref.txt  # reference to compare against
+cielab-tools calculate coverage measured_display.txt --reference srgb_ref.txt
 ```
 
 ---
 
 ## Next Steps
 
-1. **Document standards compliance**
-   - Obtain official list of compliant standards from standards committee
-   - Create `STANDARDS.md` with full compliance documentation
-   - Document any input data requirements per standard
+1. **Confirm standards references**
+   - Obtain final publication numbers from IEC TC110 once ballots close
+   - Create `STANDARDS.md` with scope statements and input data requirements per standard
 
-2. **Implement CLI structure**
+2. **Implement library gaps first** (see `TODO.md`)
+   - CGATS writer
+   - `make_rgb_signals` equivalent
+   - `compute_rings()` public method
+   - Adobe RGB in `SyntheticGamut`
+
+3. **Implement CLI**
    - Set up Typer with command groups
-   - Implement `about` command
-   - Implement `calculate volume`, `calculate coverage`, `calculate compare`
-   - Add `plot rings` and `plot surface` (wrap existing plotting code)
-   - Add `generate reference`
+   - `about` command first (no library deps)
+   - `calculate volume`, `calculate coverage`, `calculate compare`
+   - `plot rings`, `plot surface`
+   - `generate test-pattern`, `generate reference`
 
-3. **Testing**
+4. **Testing**
    - Unit tests for each CLI command
    - Integration tests with sample CGATS files
-   - Verify `--standard` metadata output is correct
+   - Verify `--standard` metadata is correct and complete
 
-4. **Documentation**
+5. **Documentation**
    - Update README with CLI examples
-   - Create user guide
    - Document British English conventions
 
 ---
 
 ## Questions for Review
 
-1. **Standards list**: Please provide the official list of compliant standards with:
-   - Full standard names and version numbers (e.g., "IEC 61966-2-1:2024")
-   - Brief description of what each standard covers
-   - Any specific input data requirements per standard
+1. **Standards numbers**: Please confirm final IEC TC110 publication numbers and dates for
+   IEC 62977-3-5 and IEC 62906-6-1 once available, for use in `about` output and metadata.
 
-2. **Report formats** *(for future planning)*: When the `report` command is designed, are
-   PDF and HTML sufficient, or is Word/Excel output needed for committee workflows?
+2. **Report formats** *(future planning)*: When the `report` command is designed, are PDF
+   and HTML sufficient, or is Word/Excel output needed for committee workflows?
 
-3. **Batch processing**: Any specific workflow needs beyond glob patterns (e.g., watching a
-   directory for new files, integration with measurement instrument software)?
+3. **Batch workflow**: Any specific needs beyond glob patterns — e.g. watching a folder,
+   integration with measurement instrument software?
 
-4. **Pre-calculated data**: Would shipping bundled cylindrical maps for the standard
-   references (sRGB, BT.2020, DCI-P3) meaningfully speed up common operations for users
-   who always compare against the same references?
+4. **Pre-computed reference data**: Would bundling pre-calculated cylindrical maps for the
+   five named reference gamuts meaningfully speed up common user workflows?

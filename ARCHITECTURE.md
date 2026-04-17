@@ -8,7 +8,7 @@ Provide non-expert users (metrologists) with a simple single-command launcher th
 a browser-based tool for exploring and publishing gamut data from CGATS measurement files.
 
 ```bash
-cielab-gamut-tools        # installs via pip, launches app in browser
+cielab-tools ui        # subcommand of the main CLI entry point; launches app in browser
 ```
 
 ## Deployment Model
@@ -18,7 +18,7 @@ access — no browser sandboxing constraints. The user's browser connects to `lo
 is purely a rendering surface.
 
 ```
-cielab-gamut-tools (CLI)
+cielab-tools ui (subcommand of main CLI)
   → starts FastAPI server on localhost:8000
   → opens browser automatically
   → Vue.js frontend talks to /api/* endpoints
@@ -83,7 +83,7 @@ POST /api/scan-folder         → { path } → [{ filename, size, modified }, ..
 POST /api/load-cgats          → { path } → { metadata, white_point, primary_count, ... }
 POST /api/compute-figure      → { paths, settings } → Plotly figure JSON
 POST /api/export              → { paths, settings, format, dpi } → file download
-GET  /api/reference-gamuts    → [{ id, name }, ...]   (sRGB, BT.2020, DCI-P3, ...)
+GET  /api/reference-gamuts    → [{ id, name }, ...]   (sRGB, BT.2020, DCI-P3, Display P3, Adobe RGB)
 ```
 
 ## Frontend Structure
@@ -125,9 +125,11 @@ def main():
 ```
 
 ```toml
-# pyproject.toml
+# pyproject.toml — the UI is a subcommand of the main CLI, not a separate entry point
+# See CLI_DESIGN.md for the entry point definition
 [project.scripts]
-cielab-gamut-tools = "cielab_gamut_tools.ui.server:main"
+cielab-gamut-tools = "cielab_gamut_tools.cli:main"
+cielab-tools       = "cielab_gamut_tools.cli:main"
 ```
 
 Users can also run `python -m cielab_gamut_tools` if preferred (add `__main__.py`).
