@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 
 from cielab_gamut_tools.gamut import Gamut
+from cielab_gamut_tools.io.cgats import read_cgats
 from cielab_gamut_tools.synthetic import SyntheticGamut
 
 
@@ -151,3 +152,232 @@ class TestGamutIntersection:
         assert self_intersection.volume() == pytest.approx(
             srgb.volume(), rel=0.001
         )
+
+
+class TestGamutXyzRetention:
+    """Tests that XYZ data is retained on Gamut objects."""
+
+    def test_synthetic_gamut_has_xyz(self):
+        """SyntheticGamut-built Gamut should have xyz populated."""
+        srgb = SyntheticGamut.srgb()
+        g = srgb.gamut
+        assert g.xyz is not None
+        assert g.xyz.shape == g.lab.shape
+
+    def test_from_xyz_retains_xyz(self):
+        """Gamut.from_xyz() should store the interpolated surface XYZ."""
+        srgb = SyntheticGamut.srgb()
+        g = srgb.gamut
+        # Build a Gamut via from_xyz using the surface points directly
+        g2 = Gamut.from_xyz(g.rgb, g.xyz)
+        assert g2.xyz is not None
+        assert g2.xyz.shape == (g2.lab.shape[0], 3)
+
+    def test_from_lab_has_no_xyz(self, tmp_path):
+        """Gamut loaded from a LAB-only file should have xyz=None."""
+        from cielab_gamut_tools.io.cgats import write_cgats
+
+        srgb = SyntheticGamut.srgb().gamut
+        # Write envelope (LAB only, no XYZ)
+        env = tmp_path / "env.txt"
+        srgb.to_cgats(env, mode="envelope")
+
+        g = Gamut.from_cgats(env)
+        assert g.xyz is None
+
+
+class TestGamutToCgats:
+    """Tests for Gamut.to_cgats() and SyntheticGamut.to_cgats()."""
+
+    def test_envelope_mode_creates_file(self, tmp_path):
+        """to_cgats() should create a file."""
+        srgb = SyntheticGamut.srgb()
+        out = tmp_path / "env.txt"
+        srgb.to_cgats(out)
+        assert out.exists()
+
+    def test_envelope_mode_file_type_header(self, tmp_path):
+        """Envelope mode should write IDMS_FILE_TYPE = CGE_ENVELOPE."""
+        srgb = SyntheticGamut.srgb()
+        out = tmp_path / "env.txt"
+        srgb.to_cgats(out, mode="envelope")
+        lines = out.read_text().splitlines()
+        assert "IDMS_FILE_TYPE\tCGE_ENVELOPE" in lines
+
+    def test_envelope_mode_has_rgb_and_lab(self, tmp_path):
+        """Envelope mode output should contain RGB and LAB columns."""
+        srgb = SyntheticGamut.srgb()
+        out = tmp_path / "env.txt"
+        srgb.to_cgats(out, mode="envelope")
+        data = read_cgats(out)
+        assert data.rgb is not None
+        assert data.lab is not None
+        assert data.xyz is None
+
+    def test_measurement_mode_file_type_header(self, tmp_path):
+        """Measurement mode should write IDMS_FILE_TYPE = CGE_MEASUREMENT."""
+        srgb = SyntheticGamut.srgb()
+        out = tmp_path / "meas.txt"
+        srgb.to_cgats(out, mode="measurement")
+        lines = out.read_text().splitlines()
+        assert "IDMS_FILE_TYPE\tCGE_MEASUREMENT" in lines
+
+    def test_measurement_mode_has_rgb_and_xyz(self, tmp_path):
+        """Measurement mode output should contain RGB and XYZ columns."""
+        srgb = SyntheticGamut.srgb()
+        out = tmp_path / "meas.txt"
+        srgb.to_cgats(out, mode="measurement")
+        data = read_cgats(out)
+        assert data.rgb is not None
+        assert data.xyz is not None
+        assert data.lab is None
+
+    def test_all_mode_no_file_type_header(self, tmp_path):
+        """'all' mode should not write an IDMS_FILE_TYPE header."""
+        srgb = SyntheticGamut.srgb()
+        out = tmp_path / "all.txt"
+        srgb.to_cgats(out, mode="all")
+        lines = out.read_text().splitlines()
+        assert not any("IDMS_FILE_TYPE" in l for l in lines)
+
+    def test_all_mode_has_rgb_xyz_lab(self, tmp_path):
+        """'all' mode output should contain RGB, XYZ, and LAB columns."""
+        srgb = SyntheticGamut.srgb()
+        out = tmp_path / "all.txt"
+        srgb.to_cgats(out, mode="all")
+        data = read_cgats(out)
+        assert data.rgb is not None
+        assert data.xyz is not None
+        assert data.lab is not None
+
+    def test_rgb_scaled_to_255(self, tmp_path):
+        """RGB values in output should be in [0, 255] range."""
+        srgb = SyntheticGamut.srgb()
+        out = tmp_path / "env.txt"
+        srgb.to_cgats(out, mode="envelope")
+        data = read_cgats(out)
+        assert data.rgb is not None
+        assert data.rgb.max() <= 255.0
+        assert data.rgb.min() >= 0.0
+
+    def test_602_unique_surface_points(self, tmp_path):
+        """to_cgats() must write 602 unique surface points, not 726 tessellation vertices.
+
+        The tessellation internally stores 726 vertices (6 × 11² for the standard
+        m=11 grid) with edge/corner vertices replicated across adjacent faces.
+        CGATS output must deduplicate these to the 602 unique RGB values — equivalent
+        to MATLAB's ``unique(rgb, 'rows')`` in make_rgb_signals.m.
+        Measuring the same RGB value twice would waste metrologist time.
+        """
+        srgb = SyntheticGamut.srgb()
+        out = tmp_path / "env.txt"
+        srgb.to_cgats(out, mode="envelope")
+        data = read_cgats(out)
+        assert data.lab is not None
+        # Standard m=11 grid: 6m² − 12m + 8 = 602 unique surface points
+        assert len(data.lab) == 602
+        # Verify no duplicate RGB rows in the output
+        assert data.rgb is not None
+        unique_rgb = np.unique(data.rgb, axis=0)
+        assert len(unique_rgb) == len(data.rgb), "Duplicate RGB values found in CGATS output"
+
+    def test_title_as_description(self, tmp_path):
+        """self.title should appear as the description line."""
+        srgb = SyntheticGamut.srgb()  # title = "sRGB"
+        out = tmp_path / "env.txt"
+        srgb.to_cgats(out)
+        lines = out.read_text().splitlines()
+        assert "sRGB" in lines
+
+    def test_custom_description_overrides_title(self, tmp_path):
+        """Explicit description kwarg should take precedence over title."""
+        srgb = SyntheticGamut.srgb()
+        out = tmp_path / "env.txt"
+        srgb.to_cgats(out, description="Custom description")
+        lines = out.read_text().splitlines()
+        assert "Custom description" in lines
+
+    def test_invalid_mode_raises(self, tmp_path):
+        """Unknown mode should raise ValueError."""
+        srgb = SyntheticGamut.srgb()
+        with pytest.raises(ValueError, match="mode"):
+            srgb.to_cgats(tmp_path / "out.txt", mode="invalid")
+
+    def test_measurement_mode_requires_xyz(self, tmp_path):
+        """measurement/all mode on a LAB-only Gamut should raise ValueError."""
+        # Build a Gamut without XYZ by loading a LAB envelope
+        srgb = SyntheticGamut.srgb()
+        env = tmp_path / "env.txt"
+        srgb.to_cgats(env, mode="envelope")
+        g = Gamut.from_cgats(env)
+
+        assert g.xyz is None
+        with pytest.raises(ValueError, match="xyz"):
+            g.to_cgats(tmp_path / "out.txt", mode="measurement")
+
+
+class TestGamutFromCgatsLab:
+    """Tests for Gamut.from_cgats() with LAB envelope files."""
+
+    def test_from_cgats_lab_produces_gamut(self, tmp_path):
+        """Loading a CGE_ENVELOPE file should return a valid Gamut."""
+        srgb = SyntheticGamut.srgb()
+        env = tmp_path / "env.txt"
+        srgb.to_cgats(env, mode="envelope")
+
+        g = Gamut.from_cgats(env)
+
+        assert g.lab.shape[1] == 3
+        assert g.triangles.shape[1] == 3
+
+    def test_from_cgats_lab_volume_close_to_original(self, tmp_path):
+        """Volume from a re-loaded LAB envelope should match the original."""
+        srgb = SyntheticGamut.srgb()
+        env = tmp_path / "env.txt"
+        srgb.to_cgats(env, mode="envelope")
+
+        g = Gamut.from_cgats(env)
+
+        assert g.volume() == pytest.approx(srgb.volume(), rel=0.001)
+
+    def test_from_cgats_lab_without_rgb_raises(self, tmp_path):
+        """A LAB file without RGB should warn and raise ValueError."""
+        from cielab_gamut_tools.io.cgats import write_cgats
+
+        lab = np.array([[0.0, 0.0, 0.0], [50.0, 10.0, -10.0]])
+        out = tmp_path / "lab_no_rgb.txt"
+        write_cgats(out, lab=lab)  # no rgb
+
+        with pytest.warns(UserWarning, match="RGB"):
+            with pytest.raises(ValueError):
+                Gamut.from_cgats(out)
+
+    def test_from_cgats_xyz_priority_over_lab(self, tmp_path):
+        """When both XYZ and LAB are present, XYZ path should be used."""
+        from cielab_gamut_tools.io.cgats import write_cgats
+
+        srgb = SyntheticGamut.srgb().gamut
+        rgb_255 = np.round(srgb.rgb * 255)
+        out = tmp_path / "both.txt"
+        write_cgats(out, rgb=rgb_255, xyz=srgb.xyz, lab=srgb.lab)
+
+        g = Gamut.from_cgats(out)
+
+        # XYZ path re-derives Lab; result should still be close
+        assert g.xyz is not None  # XYZ path was taken
+        assert g.volume() == pytest.approx(srgb.volume(), rel=0.001)
+
+    def test_from_cgats_reference_envelope(self):
+        """Load the IDMS reference sRGB CGE_ENVELOPE and check volume."""
+        ref = Path(
+            "standards/IDMS 5.32-code/"
+            "Reference_sRGB_IEC_61966-2-1_cge_envelope.txt"
+        )
+        if not ref.exists():
+            pytest.skip("Reference envelope file not available")
+
+        g = Gamut.from_cgats(ref)
+
+        assert g.xyz is None  # envelope file has no XYZ
+        # Volume should be within 1% of the MATLAB reference
+        assert g.volume() == pytest.approx(830732, rel=0.01)

@@ -4,6 +4,8 @@ Main Gamut class for representing and analyzing color gamuts.
 
 from __future__ import annotations
 
+import warnings
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -27,6 +29,12 @@ class Gamut:
     Attributes:
         lab: CIELab coordinates of the gamut surface points (N x 3 array).
         triangles: Triangle indices for the tesselated surface (M x 3 array).
+        rgb: RGB coordinates of the surface points (N x 3, range [0, 1]),
+             or None if not available.
+        xyz: XYZ tristimulus values of the surface points in the source
+             colorspace (D65 for most displays), shape (N x 3), or None.
+             Retained from construction for export and future analyses.
+        title: Human-readable gamut name.
     """
 
     def __init__(
@@ -35,6 +43,7 @@ class Gamut:
         triangles: NDArray[np.integer],
         *,
         rgb: NDArray[np.floating] | None = None,
+        xyz: NDArray[np.floating] | None = None,
         title: str | None = None,
     ) -> None:
         """
@@ -44,7 +53,11 @@ class Gamut:
             lab: CIELab coordinates of surface points, shape (N, 3).
             triangles: Triangle vertex indices, shape (M, 3).
             rgb: RGB coordinates of surface points, shape (N, 3), range [0, 1].
-                 Aligned with ``lab``. Used for primary colour indicators.
+                 Aligned with ``lab``. Used for topology reconstruction and
+                 primary colour indicators.
+            xyz: XYZ tristimulus values of surface points in source colorspace
+                 (typically D65), shape (N, 3). Retained for export and future
+                 analyses in chromaticity or XYZ space.
             title: Human-readable gamut name shown in plot titles.
 
         Note:
@@ -54,32 +67,75 @@ class Gamut:
         self.lab = lab
         self.triangles = triangles
         self.rgb = rgb
+        self.xyz = xyz
         self.title = title
         self._volume: float | None = None
         self._cylindrical_map: NDArray[np.floating] | None = None
         self._cylmap_counts: NDArray[np.integer] | None = None
 
     @classmethod
-    def from_cgats(cls, path: str) -> Gamut:
+    def from_cgats(cls, path: str | Path) -> Gamut:
         """
         Load a gamut from a CGATS.17 format file.
 
+        Handles both CGE_MEASUREMENT files (RGB + XYZ) and CGE_ENVELOPE
+        files (RGB + LAB). When XYZ is present it takes priority and the
+        Bradford D65→D50 adaptation and Lab conversion are applied. When
+        only LAB is present the stored values are used directly.
+
+        RGB values must be present in the file to reconstruct the gamut
+        topology; a file without RGB is rejected with a warning.
+
         Args:
-            path: Path to the CGATS file containing RGB and XYZ measurements.
+            path: Path to the CGATS file.
 
         Returns:
             A new Gamut instance.
 
         Raises:
             FileNotFoundError: If the file does not exist.
-            ValueError: If the file format is invalid or missing required fields.
+            ValueError: If the file format is invalid, required fields are
+                missing, or RGB data is absent.
         """
-        import os
         from cielab_gamut_tools.io.cgats import read_cgats
 
-        rgb, xyz, metadata = read_cgats(path)
-        title = metadata.get("title") or os.path.splitext(os.path.basename(path))[0]
-        return cls.from_xyz(rgb, xyz, metadata=metadata, title=title)
+        path = Path(path)
+        data = read_cgats(path)
+        title = data.metadata.get("title") or path.stem
+
+        if data.xyz is not None:
+            if data.rgb is None:
+                warnings.warn(
+                    f"{path.name}: XYZ data found without RGB values. "
+                    "RGB is required to reconstruct the gamut topology and is "
+                    "mandatory for standards-compliant analysis.",
+                    UserWarning,
+                    stacklevel=2,
+                )
+                raise ValueError(
+                    "CGATS file must contain RGB values alongside XYZ data"
+                )
+            return cls.from_xyz(data.rgb, data.xyz, metadata=data.metadata, title=title)
+
+        if data.lab is not None:
+            if data.rgb is None:
+                warnings.warn(
+                    f"{path.name}: LAB data found without RGB values. "
+                    "RGB is required to reconstruct the gamut topology and is "
+                    "mandatory for standards-compliant analysis.",
+                    UserWarning,
+                    stacklevel=2,
+                )
+                raise ValueError(
+                    "CGATS file must contain RGB values alongside LAB data"
+                )
+            return cls._from_lab_and_rgb(
+                data.rgb, data.lab, metadata=data.metadata, title=title
+            )
+
+        raise ValueError(
+            f"{path.name}: CGATS file must contain XYZ or LAB colorspace data"
+        )
 
     @classmethod
     def from_xyz(
@@ -93,6 +149,10 @@ class Gamut:
         """
         Create a gamut from RGB and XYZ measurement data.
 
+        The XYZ values are assumed to be in D65 colorspace (typical for
+        emissive displays). Bradford chromatic adaptation to D50 is applied
+        before converting to CIELab.
+
         Args:
             rgb: RGB values, shape (N, 3), range [0, 1] or [0, 255].
             xyz: Corresponding XYZ tristimulus values, shape (N, 3).
@@ -100,7 +160,8 @@ class Gamut:
             title: Human-readable gamut name shown in plot titles.
 
         Returns:
-            A new Gamut instance.
+            A new Gamut instance. ``gamut.xyz`` holds the D65 surface XYZ
+            values (interpolated to tesselation points) for later export.
         """
         from cielab_gamut_tools.colorspace.adaptation import adapt_d65_to_d50
         from cielab_gamut_tools.colorspace.lab import xyz_to_lab
@@ -113,8 +174,8 @@ class Gamut:
         # Create surface tesselation
         triangles, rgb_surface = make_tesselation()
 
-        # Interpolate XYZ for tesselation points
-        xyz_surface = _interpolate_xyz(rgb, xyz, rgb_surface)
+        # Interpolate XYZ at tesselation surface points
+        xyz_surface = _interpolate_colordata(rgb, xyz, rgb_surface)
 
         # Chromatic adaptation D65 -> D50
         xyz_d50 = adapt_d65_to_d50(xyz_surface)
@@ -122,7 +183,43 @@ class Gamut:
         # Convert to CIELab
         lab = xyz_to_lab(xyz_d50)
 
-        return cls(lab, triangles, rgb=rgb_surface, title=title)
+        return cls(lab, triangles, rgb=rgb_surface, xyz=xyz_surface, title=title)
+
+    @classmethod
+    def _from_lab_and_rgb(
+        cls,
+        rgb: NDArray[np.floating],
+        lab: NDArray[np.floating],
+        *,
+        metadata: dict | None = None,
+        title: str | None = None,
+    ) -> Gamut:
+        """
+        Create a gamut directly from RGB and CIELab surface data.
+
+        Used when loading a CGE_ENVELOPE file that already contains D50
+        Lab coordinates. The standard tesselation topology is reconstructed
+        from the RGB values; no colorspace conversion is applied.
+
+        Args:
+            rgb: RGB values, shape (N, 3), range [0, 1] or [0, 255].
+            lab: CIELab values, shape (N, 3).
+            metadata: Optional metadata dict.
+            title: Human-readable gamut name.
+
+        Returns:
+            A new Gamut instance. ``gamut.xyz`` is None (not available from
+            a LAB-only source file).
+        """
+        from cielab_gamut_tools.geometry.tesselation import make_tesselation
+
+        if rgb.max() > 1.0:
+            rgb = rgb / 255.0
+
+        triangles, rgb_surface = make_tesselation()
+        lab_surface = _interpolate_colordata(rgb, lab, rgb_surface)
+
+        return cls(lab_surface, triangles, rgb=rgb_surface, xyz=None, title=title)
 
     def volume(self) -> float:
         """
@@ -157,6 +254,111 @@ class Gamut:
         from cielab_gamut_tools.geometry.volume import intersect_gamuts
 
         return intersect_gamuts(self, other)
+
+    def to_cgats(
+        self,
+        path: str | Path,
+        *,
+        mode: str = "envelope",
+        description: str | None = None,
+        created: str | None = None,
+    ) -> None:
+        """
+        Write gamut data to a CGATS.17 Format 2 file.
+
+        Args:
+            path: Output file path.
+            mode: Controls which data columns are written and which
+                ``IDMS_FILE_TYPE`` header is used:
+
+                - ``"envelope"`` *(default)*: RGB + LAB,
+                  ``IDMS_FILE_TYPE = CGE_ENVELOPE``.
+                - ``"measurement"``: RGB + XYZ,
+                  ``IDMS_FILE_TYPE = CGE_MEASUREMENT``.
+                - ``"all"``: RGB + XYZ + LAB, no ``IDMS_FILE_TYPE`` header.
+
+            description: Free-text description line. Defaults to
+                ``self.title`` when not supplied.
+            created: Creation date string written as ``CREATED\\t<value>``.
+
+        Raises:
+            ValueError: If *mode* is ``"measurement"`` or ``"all"`` and
+                ``self.xyz`` is None.
+            ValueError: If *mode* is unrecognised.
+
+        Note:
+            RGB values are scaled from the internal [0, 1] range to [0, 255]
+            on output to match the IDMS reference files.
+        """
+        from cielab_gamut_tools.io.cgats import write_cgats
+
+        valid_modes = ("envelope", "measurement", "all")
+        if mode not in valid_modes:
+            raise ValueError(
+                f"mode must be one of {valid_modes!r}, got {mode!r}"
+            )
+
+        if mode in ("measurement", "all") and self.xyz is None:
+            raise ValueError(
+                f"to_cgats(mode={mode!r}) requires XYZ data, but self.xyz is None. "
+                "XYZ is retained when the Gamut was created via from_xyz() or "
+                "from_cgats() with an XYZ-containing file."
+            )
+
+        # Scale RGB from internal [0, 1] to [0, 255] for CGATS output
+        rgb_out: NDArray[np.floating] | None = None
+        if self.rgb is not None:
+            rgb_out = np.round(self.rgb * 255).astype(np.float64)
+
+        # Deduplicate tessellation vertices before writing.
+        #
+        # make_tesselation() deliberately produces 726 vertices for m=11 (the
+        # standard 11-point grid): edge and corner vertices are replicated across
+        # adjacent faces so the triangulation is geometrically complete. For CGATS
+        # output we must remove these duplicates and write only the 602 unique
+        # surface points, exactly matching MATLAB's:
+        #
+        #   [~, rgb] = make_tesselation(V);
+        #   rgb = unique(rgb, 'rows');          % in make_rgb_signals.m
+        #
+        # This matters most for mode="measurement": duplicate RGB values would
+        # send the metrologist the same signal twice, wasting measurement time.
+        # Envelope and all modes are deduplicated for the same reason — a
+        # standards-compliant CGE_ENVELOPE file has exactly n unique rows.
+        if rgb_out is not None:
+            _, unique_idx = np.unique(rgb_out, axis=0, return_index=True)
+            # unique_idx is already in the lexicographic sort order that
+            # np.unique uses, matching MATLAB's unique(rgb,'rows') ordering.
+            rgb_out = rgb_out[unique_idx]
+            lab_out = self.lab[unique_idx] if mode in ("envelope", "all") else None
+            xyz_out = (
+                self.xyz[unique_idx]
+                if mode in ("measurement", "all") and self.xyz is not None
+                else None
+            )
+        else:
+            lab_out = self.lab if mode in ("envelope", "all") else None
+            xyz_out = (
+                self.xyz
+                if mode in ("measurement", "all") and self.xyz is not None
+                else None
+            )
+
+        file_type: str | None = {
+            "envelope": "CGE_ENVELOPE",
+            "measurement": "CGE_MEASUREMENT",
+            "all": None,
+        }[mode]
+
+        write_cgats(
+            path,
+            rgb=rgb_out,
+            xyz=xyz_out,
+            lab=lab_out,
+            description=description if description is not None else self.title,
+            created=created,
+            file_type=file_type,
+        )
 
     def plot_surface(
         self,
@@ -203,39 +405,39 @@ class Gamut:
         return plot_rings(self, reference=reference, reference2=reference2, **kwargs)
 
 
-def _interpolate_xyz(
+def _interpolate_colordata(
     rgb_measured: NDArray[np.floating],
-    xyz_measured: NDArray[np.floating],
+    colordata_measured: NDArray[np.floating],
     rgb_query: NDArray[np.floating],
 ) -> NDArray[np.floating]:
     """
-    Interpolate XYZ values for query RGB points based on measurements.
+    Interpolate color values for query RGB points based on measurements.
 
-    Uses the measured RGB->XYZ mapping to estimate XYZ values at arbitrary
-    RGB coordinates on the gamut surface.
+    Used for both XYZ and LAB data: given a set of measured (RGB, color)
+    pairs, estimate color values at arbitrary RGB coordinates on the gamut
+    surface. Points outside the convex hull of the measured RGB data fall
+    back to nearest-neighbour interpolation.
 
     Args:
         rgb_measured: Measured RGB values, shape (N, 3), range [0, 1].
-        xyz_measured: Corresponding XYZ values, shape (N, 3).
+        colordata_measured: Corresponding color values, shape (N, 3).
         rgb_query: RGB coordinates to interpolate, shape (M, 3).
 
     Returns:
-        Interpolated XYZ values, shape (M, 3).
+        Interpolated color values, shape (M, 3).
     """
     from scipy.interpolate import LinearNDInterpolator, NearestNDInterpolator
 
-    # Build linear interpolator from measured data
-    linear_interp = LinearNDInterpolator(rgb_measured, xyz_measured)
+    linear_interp = LinearNDInterpolator(rgb_measured, colordata_measured)
+    result = linear_interp(rgb_query)
 
-    # Interpolate XYZ at query points
-    xyz_query = linear_interp(rgb_query)
-
-    # LinearNDInterpolator returns NaN for points outside the convex hull
-    # of the input data. Use nearest-neighbor for those points.
-    nan_mask = np.isnan(xyz_query).any(axis=1)
-
+    nan_mask = np.isnan(result).any(axis=1)
     if np.any(nan_mask):
-        nearest_interp = NearestNDInterpolator(rgb_measured, xyz_measured)
-        xyz_query[nan_mask] = nearest_interp(rgb_query[nan_mask])
+        nearest_interp = NearestNDInterpolator(rgb_measured, colordata_measured)
+        result[nan_mask] = nearest_interp(rgb_query[nan_mask])
 
-    return xyz_query
+    return result
+
+
+# Keep old name as an alias so any internal callers still work
+_interpolate_xyz = _interpolate_colordata

@@ -11,20 +11,20 @@ Items are grouped by area and ordered by priority within each group.
 
 These are missing pieces in the Python library itself, independent of the CLI.
 
-### 1. CGATS writer
-**Priority: High — blocks `generate reference` and interop workflows.**
+### 1. CGATS writer ✅ DONE
+**Completed.** The I/O layer is now fully general:
 
-The library can read CGATS 17 format 2 but cannot write it. The standards define a
-specific output format for the gamut envelope (CIELab D50 coordinates, with header
-metadata). This is equivalent to `writeCGATS.m` in the MATLAB reference code and to
-IDMS Code 5 (`Reference_sRGB_IEC_61966-2.1_gamut_envelope.txt`).
-
-Required fields in output file:
-- `SAMPLE_ID`, `LAB_L`, `LAB_A`, `LAB_B`
-- Header: originator, description, creation date, number of samples
-- Optionally: source RGB values (`RGB_R`, `RGB_G`, `RGB_B`)
-
-Add to: `src/cielab_gamut_tools/io/cgats.py`
+- `read_cgats()` returns `CgatsData(rgb, xyz, lab, metadata)` — detects all
+  colorspace columns; any field is `None` if absent in the file.
+- `write_cgats()` accepts `rgb=`, `xyz=`, `lab=` in any combination; writes
+  whichever are provided in standard column order.
+- `Gamut.from_cgats()` handles both CGE_MEASUREMENT (RGB+XYZ) and CGE_ENVELOPE
+  (RGB+LAB) files. Missing RGB raises `ValueError` with `warnings.warn`.
+- `Gamut.to_cgats(mode=)` — `"envelope"` (default), `"measurement"`, `"all"`.
+  RGB is scaled to [0, 255] on output. XYZ is retained from construction.
+- `SyntheticGamut.to_cgats()` delegates to the underlying `Gamut`.
+- `_looks_like_field_names()` now requires at least one data column (RGB/XYZ/LAB)
+  to match — avoids false positives on `KEYWORD SampleID` metadata lines.
 
 ### 2. RGB signal generator (`make_rgb_signals`)
 **Priority: High — needed for end-to-end measurement workflow.**
@@ -185,6 +185,28 @@ IEC 62977-3-5 §6.6.2 specifies CGV at multiple viewing angles (±15°, ±30°, 
 the multi-direction workflow is a measurement and data-organisation concern rather
 than an algorithmic one. A CLI workflow (batch CGATS files → volume vs. angle table)
 would be useful for TV/monitor off-axis characterisation.
+
+### F5. Intersection gamut serialisation (CGE_CYLMAP)
+
+An intersected `Gamut` has no RGB surface mapping — it exists only as a cylindrical
+map. To save/restore intersection results without recomputing, a flat serialisation
+of the cylindrical map is needed. Proposed CGATS-style format:
+
+```
+IDMS_FILE_TYPE   CGE_CYLMAP
+BEGIN_DATA_FORMAT
+SampleID LAB_L HUE CHROMA DIRECTION
+END_DATA_FORMAT
+```
+
+Where `DIRECTION = +1` means the ray exits the gamut body at that point (outward
+surface hit) and `-1` means it enters (inward). `CHROMA` is the radial distance from
+the achromatic axis. `LAB_L` and `HUE` are the L* level and hue angle (degrees) for
+that cylindrical map cell. Each cell may contribute 0–4 rows (MAX_K = 4).
+
+This format is sufficient to reconstruct volume, ring plots, and coverage without
+re-running the full ray-triangle intersection. Any result produced without RGB data
+is non-standards-compliant and should be flagged as such.
 
 ### F4. Bundled pre-computed cylindrical maps
 Shipping `.pkl` files for the five named reference gamuts would speed up repeated

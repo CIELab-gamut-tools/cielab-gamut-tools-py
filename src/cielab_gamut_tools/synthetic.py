@@ -11,7 +11,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 if TYPE_CHECKING:
-    pass
+    from pathlib import Path
 
 
 # Standard illuminant white points (CIE xy chromaticity)
@@ -125,7 +125,7 @@ class SyntheticGamut:
         # Generate RGB cube tesselation
         triangles, rgb_surface = make_tesselation()
 
-        # Convert RGB to XYZ using primaries and white point
+        # Convert RGB to XYZ using primaries and white point (source colorspace)
         xyz_surface = self._rgb_to_xyz(rgb_surface)
 
         # Chromatic adaptation to D50
@@ -134,7 +134,8 @@ class SyntheticGamut:
         # Convert to CIELab
         lab = xyz_to_lab(xyz_d50)
 
-        return Gamut(lab, triangles, rgb=rgb_surface, title=self.title)
+        # Store source-space XYZ alongside Lab for export and future analyses
+        return Gamut(lab, triangles, rgb=rgb_surface, xyz=xyz_surface, title=self.title)
 
     def _rgb_to_xyz(self, rgb: NDArray[np.floating]) -> NDArray[np.floating]:
         """
@@ -176,6 +177,10 @@ class SyntheticGamut:
     def plot_surface(self, **kwargs) -> "Figure":
         """Create a 3D surface plot."""
         return self.gamut.plot_surface(**kwargs)
+
+    def to_cgats(self, path: "str | Path", **kwargs) -> None:
+        """Write gamut data to a CGATS.17 file. See ``Gamut.to_cgats()``."""
+        return self.gamut.to_cgats(path, **kwargs)
 
     def plot_rings(
         self,

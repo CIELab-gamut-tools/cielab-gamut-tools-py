@@ -6,14 +6,23 @@ Python implementation of gamut volume calculation for color displays. This is a 
 
 ## Implementation Status
 
-### Working — All 55 tests passing
+### Working — All tests passing
 - **SyntheticGamut**: sRGB, BT.2020, DCI-P3, Display P3, custom gamuts
 - **Volume calculation**: Ray-triangle intersection algorithm matching MATLAB
 - **Colorspace**: XYZ↔Lab, Bradford chromatic adaptation, sRGB gamma
 - **Tesselation**: RGB cube surface with correct triangle winding
-- **CGATS parsing**: CGATS.17 file reading with RGB+XYZ extraction
-- **`_interpolate_xyz()`**: Scipy-based scattered interpolation for measured data
-- **`Gamut.from_cgats()` / `Gamut.from_xyz()`**: Full pipeline from measurements to Lab surface
+- **CGATS I/O**: generalised reader (`CgatsData`) and writer supporting any
+  combination of RGB, XYZ, and LAB columns; auto-detects colorspace on read
+- **`_interpolate_colordata()`**: Scipy-based scattered interpolation for measured
+  data (used for both XYZ and LAB interpolation to surface points)
+- **`Gamut.from_cgats()`**: handles both CGE_MEASUREMENT (RGB+XYZ) and
+  CGE_ENVELOPE (RGB+LAB) files; XYZ takes priority when both are present
+- **`Gamut.from_xyz()`**: full pipeline from measurements to Lab surface; retains
+  D65 XYZ surface values on `gamut.xyz` for export and future analyses
+- **`Gamut.to_cgats()`**: writes CGE_ENVELOPE, CGE_MEASUREMENT, or combined file
+  (`mode="envelope"` / `"measurement"` / `"all"`)
+- **`SyntheticGamut.to_cgats()`**: delegates to `gamut.to_cgats()`; XYZ available
+  since `_build_gamut()` now stores source-space XYZ on the Gamut object
 - **`intersect_gamuts()`**: Gamut intersection via cylindrical map intersection
 - **Plotting**: `plot_surface()` and `plot_rings()` written (untested interactively)
 
@@ -64,6 +73,31 @@ src/cielab_gamut_tools/
 ### Tesselation (geometry/tesselation.py)
 
 **Must match MATLAB exactly.** Key points:
+
+> **726 vs 602 vertices — do not confuse these two counts.**
+>
+> `make_tesselation()` deliberately produces **726 vertices** for the standard m=11
+> grid (6 × 11² = 726). Edge and corner grid points are replicated across adjacent
+> faces so that each face's triangle strip is self-contained. This is geometrically
+> correct and matches the MATLAB `make_tesselation.m` output exactly.
+>
+> However, **CGATS files and measurement signal lists must contain only the 602 unique
+> surface points** (6m² − 12m + 8 = 602 for m=11). Measuring a duplicate RGB value
+> twice wastes metrologist time and is not permitted by the standards.
+>
+> The MATLAB reference handles this in `make_rgb_signals.m` with:
+> ```matlab
+> [~, rgb] = make_tesselation(V);
+> rgb = unique(rgb, 'rows');   % 726 → 602
+> ```
+> and in `get_volume.m` / `get_d_C.m` it goes the other direction via `map_rows.m`,
+> expanding the 602-point envelope back to the 726-vertex tessellation for ray
+> intersection.
+>
+> In Python: `Gamut.to_cgats()` applies `np.unique(rgb_out, axis=0)` before calling
+> `write_cgats()` to ensure all output files contain exactly 602 unique rows.
+> The internal `self.lab`, `self.rgb`, `self.xyz` arrays remain 726 entries for
+> geometric correctness. **Never remove the deduplication step from `to_cgats()`.**
 
 1. **Vertex ordering for consistent winding:**
    - Bottom faces (value=0): `[Lower, J, K]`, `[K, Lower, J]`, `[J, K, Lower]`
