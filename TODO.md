@@ -26,65 +26,27 @@ These are missing pieces in the Python library itself, independent of the CLI.
 - `_looks_like_field_names()` now requires at least one data column (RGB/XYZ/LAB)
   to match — avoids false positives on `KEYWORD SampleID` metadata lines.
 
-### 2. RGB signal generator (`make_rgb_signals`)
-**Priority: High — needed for end-to-end measurement workflow.**
+### 2. RGB signal generator (`make_rgb_signals`) ✅ DONE
+**Completed.** `make_rgb_signals(m=11, bits=8)` in
+`src/cielab_gamut_tools/measurement.py`, exported from the top-level package.
+Supports all standard grid sizes (m=5/7/9/11) and arbitrary bit depth. Deduplicates
+tessellation vertices to the normative n = 6m²−12m+8 unique points in lexicographic
+order, matching MATLAB's `unique(rgb,'rows')`.
 
-Generate the ordered set of RGB input signal values for display measurement. This is
-the normative first step in all three standards (IDMS §5.32, IEC 62977-3-5 Annex A,
-IEC 62906-6-1 Annex A.2), equivalent to IDMS Code 1 (`make_rgb_signals.m`).
+### 3. `compute_rings()` — public method ✅ DONE
+**Completed.** `Gamut.compute_rings(l_steps=100, h_steps=360)` and
+`SyntheticGamut.compute_rings()` added. Backed by
+`compute_cylindrical_rings()` in `src/cielab_gamut_tools/geometry/volume.py`.
+Returns a `(l_steps, h_steps)` array of C\*_RSS values (non-decreasing along L*,
+outer ring area equals total gamut volume).
 
-The set is defined by grid divisions `m` per cube edge:
-```
-n = 6m² − 12m + 8
-```
-Standard sizes:
-| m  | n    | Name |
-|----|------|------|
-| 11 | 602  | Normative reference set |
-|  9 | 386  | Reduced (estimate only) |
-|  7 | 218  | Reduced (estimate only) |
-|  5 |  98  | Reduced (estimate only) |
+The intersection ring offset rendering (IEC 62906-6-1 Formula 3) is not yet
+implemented — deferred until the standard's Annex A.3.3 can be verified.
 
-Output: ordered array of (R, G, B) signal values, in the tessellation order that the
-analysis code expects. Must support arbitrary bit depth (default 8-bit, 0–255).
-
-Add to: `src/cielab_gamut_tools/io/` or a new `src/cielab_gamut_tools/measurement.py`
-
-### 3. `compute_rings()` — public method
-**Priority: Medium — needed for CLI `calculate` output and future `report` command.**
-
-The gamut ring diagram is a normative metric in all three standards, not just a
-visualisation. The ring radius per (L*, h) cell is defined as:
-
-```
-C*_RSS(L*, h) = sqrt(2 × cumsum(V(l, h)) / Δh)
-```
-
-Currently the ring data is computed internally inside `plot_rings()` but is not
-exposed as a public API. A `Gamut.compute_rings()` method should return the (100, 360)
-C\*_RSS array so it can be output as CSV/JSON by the CLI and consumed by the future
-report system without going through matplotlib.
-
-The intersection ring offset rendering (IEC 62906-6-1 Formula 3) should also be
-implemented here and verified against the normative MATLAB code in Annex A.3.3 of
-that standard.
-
-Add to: `src/cielab_gamut_tools/gamut.py` (public method) and
-`src/cielab_gamut_tools/geometry/volume.py` (underlying calculation)
-
-### 4. Adobe RGB in `SyntheticGamut`
-**Priority: Low — trivial addition.**
-
-Adobe RGB (1998) is the worked example in IEC 62906-6-1 (Table B.1), which provides
-a full 602-point CGATS reference dataset for it. Add as a named factory method
-alongside `srgb()`, `bt2020()` etc.
-
-Primary chromaticities (xy):
-- R: (0.640, 0.330)   G: (0.210, 0.710)   B: (0.150, 0.060)
-- White: D65 (0.3127, 0.3290)
-- Gamma: 2.2
-
-Add to: `src/cielab_gamut_tools/synthetic.py`
+### 4. Adobe RGB in `SyntheticGamut` ✅ DONE
+**Completed.** `SyntheticGamut.adobe_rgb()` added to `synthetic.py`. Primaries,
+white point (D65), and gamma (2.2) match IEC 62906-6-1 Table B.1. Volume falls
+between sRGB and BT.2020 as expected.
 
 ### 5. Sub-602-point XYZ interpolation — standards-compliant path
 **Priority: Low — current method works; this is a compliance note.**
@@ -109,12 +71,10 @@ applicability.
 
 ## Library — Testing Gaps
 
-### 6. Interactive test of `plot_rings()` and `plot_surface()`
-**Priority: Medium — noted in CLAUDE.md as a known gap.**
-
-Both plotting functions are written but have no automated or interactive test. Verify
-they produce correct figures with real CGATS data. Add smoke tests (figure creation
-without error) to the test suite. See `CLAUDE.md` §Known Gaps.
+### 6. Interactive test of `plot_rings()` and `plot_surface()` ✅ DONE
+**Completed.** Smoke tests added in `tests/test_measurement.py`: figure creation
+without error for `plot_surface()`, `plot_rings()`, `plot_rings()` with reference,
+intersection-plot mode, and Adobe RGB. All pass with the Agg backend.
 
 ---
 

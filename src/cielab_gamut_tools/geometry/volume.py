@@ -448,6 +448,52 @@ def intersect_gamuts(
     return intersected
 
 
+def compute_cylindrical_rings(
+    gamut: "Gamut",
+    l_steps: int = 100,
+    h_steps: int = 360,
+) -> NDArray[np.floating]:
+    """
+    Compute the C*_RSS gamut ring radii at each (L*, hue) grid point.
+
+    This is a normative metric in IDMS v1.3, IEC 62977-3-5, and IEC 62906-6-1.
+    The ring radius at L* level *l* and hue *h* is defined as:
+
+    .. code-block:: none
+
+        C*_RSS(l, h) = sqrt(2 × cumsum_l(V(l, h)) / Δh)
+
+    where the cumulative sum is taken over L* from 0 upward, matching
+    ``calcGamutRings.m`` from the MATLAB reference.
+
+    Args:
+        gamut: The gamut to compute rings for.
+        l_steps: Number of L* bins (default 100).
+        h_steps: Number of hue bins (default 360).
+
+    Returns:
+        Array of shape ``(l_steps, h_steps)`` containing C*_RSS values.
+        Row 0 is the cumulative ring at the first L* level (~L*=1); the
+        last row (index ``l_steps-1``) is the overall gamut outer ring at
+        ~L*=100.
+    """
+    cylmap, counts = get_cylindrical_map(gamut, l_steps, h_steps)
+
+    dh = 2 * np.pi / h_steps
+    dl = 100.0 / l_steps
+
+    k_range = np.arange(cylmap.shape[2])
+    mask = k_range[None, None, :] < counts[:, :, None]
+    volmap = (
+        np.sum(cylmap[:, :, :, 0] * cylmap[:, :, :, 1] ** 2 * mask, axis=2)
+        * dl * dh / 2
+    )  # (l_steps, h_steps)
+
+    cumvol = np.cumsum(volmap, axis=0)  # (l_steps, h_steps)
+    r2 = 2.0 * cumvol / dh
+    return np.sqrt(np.maximum(r2, 0.0))
+
+
 def _integrate_cylmap(
     cylmap: NDArray[np.floating],
     counts: NDArray[np.integer],

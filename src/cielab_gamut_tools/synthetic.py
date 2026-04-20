@@ -59,6 +59,13 @@ DCI_P3_PRIMARIES = np.array([
     [0.150, 0.060],   # Blue
 ])
 
+# Adobe RGB (1998) primaries — worked example in IEC 62906-6-1 Table B.1
+ADOBE_RGB_PRIMARIES = np.array([
+    [0.640, 0.330],   # Red
+    [0.210, 0.710],   # Green
+    [0.150, 0.060],   # Blue
+])
+
 
 class SyntheticGamut:
     """
@@ -115,6 +122,16 @@ class SyntheticGamut:
         """Create a Display P3 reference gamut (D65 white, sRGB gamma)."""
         return cls(DCI_P3_PRIMARIES, D65_WHITE, gamma = srgb_gamma, title="Display P3")
 
+    @classmethod
+    def adobe_rgb(cls) -> SyntheticGamut:
+        """Create an Adobe RGB (1998) reference gamut (D65 white, gamma 2.2).
+
+        Primaries and white point match the worked example in IEC 62906-6-1
+        Table B.1, which provides a 602-point CGATS reference dataset for this
+        gamut.
+        """
+        return cls(ADOBE_RGB_PRIMARIES, D65_WHITE, gamma=2.2, title="Adobe RGB (1998)")
+
     def _build_gamut(self) -> "Gamut":
         """Build the underlying Gamut object."""
         from cielab_gamut_tools.gamut import Gamut
@@ -169,6 +186,10 @@ class SyntheticGamut:
     def volume(self) -> float:
         """Calculate the gamut volume."""
         return self.gamut.volume()
+
+    def compute_rings(self, l_steps: int = 100, h_steps: int = 360):
+        """Compute C*_RSS ring radii. See ``Gamut.compute_rings()``."""
+        return self.gamut.compute_rings(l_steps, h_steps)
 
     def intersect(self, other: "Gamut | SyntheticGamut") -> "Gamut":
         """Compute intersection with another gamut."""

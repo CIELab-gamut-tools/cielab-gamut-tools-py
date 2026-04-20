@@ -4,6 +4,8 @@ Python implementation of gamut volume calculation for color displays. This is a 
 
 **IMPORTANT:** This code must produce results identical to the MATLAB reference (within numerical precision). The MATLAB code is incorporated into IEC and ICDM standards. Always match the MATLAB algorithm exactly.
 
+**WORKFLOW:** Work directly in the main project folder (`cielab-gamut-tools-py/`), not in git worktrees. This is a single-developer project — worktrees add complexity without benefit.
+
 ## Implementation Status
 
 ### Working — All tests passing
@@ -24,7 +26,10 @@ Python implementation of gamut volume calculation for color displays. This is a 
 - **`SyntheticGamut.to_cgats()`**: delegates to `gamut.to_cgats()`; XYZ available
   since `_build_gamut()` now stores source-space XYZ on the Gamut object
 - **`intersect_gamuts()`**: Gamut intersection via cylindrical map intersection
-- **Plotting**: `plot_surface()` and `plot_rings()` written (untested interactively)
+- **Plotting**: `plot_surface()` and `plot_rings()` written and smoke-tested (Agg backend)
+- **`make_rgb_signals(m, bits)`**: normative RGB test signal set; m=5/7/9/11, arbitrary bit depth; exported from top-level package
+- **`SyntheticGamut.adobe_rgb()`**: Adobe RGB (1998) matching IEC 62906-6-1 Table B.1
+- **`Gamut.compute_rings()`** / **`SyntheticGamut.compute_rings()`**: returns `(l_steps, h_steps)` C\*_RSS array — normative ring metric in all three standards
 
 ### Verified Results
 - `SyntheticGamut.srgb().volume()` → ~830,330 (MATLAB: 830,766, difference ~0.05%, within 1% tolerance)
@@ -45,7 +50,7 @@ Optimisations applied (in order):
 6. **Numba warm-up at import** — both JIT functions are called with minimal dummy arrays at module load time, so cache-load cost is paid at import rather than on the first real computation
 
 ### Known Gaps
-1. **Plotting untested interactively** — `plot_surface()` and `plot_rings()` have no automated tests
+1. **Intersection ring offset** — `compute_rings()` does not yet implement the IEC 62906-6-1 Formula 3 intersection ring offset variant; deferred until Annex A.3.3 can be verified against MATLAB
 
 ## Architecture
 

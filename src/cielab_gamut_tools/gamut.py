@@ -241,6 +241,36 @@ class Gamut:
             self._volume = _integrate_cylmap(cylmap, counts, 100, 360)
         return self._volume
 
+    def compute_rings(
+        self,
+        l_steps: int = 100,
+        h_steps: int = 360,
+    ) -> NDArray[np.floating]:
+        """
+        Compute the C*_RSS gamut ring radii at each (L*, hue) grid point.
+
+        The ring radius at L* level *l* and hue *h* satisfies:
+
+        .. code-block:: none
+
+            C*_RSS(l, h) = sqrt(2 × cumsum_l(V(l, h)) / Δh)
+
+        where the cumulative sum is taken over L* from 0 upward. This is the
+        normative ring metric in IDMS v1.3, IEC 62977-3-5, and IEC 62906-6-1.
+
+        Args:
+            l_steps: Number of L* bins (default 100).
+            h_steps: Number of hue bins (default 360).
+
+        Returns:
+            Array of shape ``(l_steps, h_steps)`` of C*_RSS values. Row 0
+            is the cumulative ring at the first L* bin; the last row is the
+            outer ring at ~L*=100.
+        """
+        from cielab_gamut_tools.geometry.volume import compute_cylindrical_rings
+
+        return compute_cylindrical_rings(self, l_steps, h_steps)
+
     def intersect(self, other: Gamut | SyntheticGamut) -> Gamut:
         """
         Compute the intersection of this gamut with another.
