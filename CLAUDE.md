@@ -21,14 +21,20 @@ Python implementation of gamut volume calculation for color displays. This is a 
   non-standard measurement grids
 - **`Gamut.from_cgats()`**: handles both CGE_MEASUREMENT (RGB+XYZ) and
   CGE_ENVELOPE (RGB+LAB) files; XYZ takes priority when both are present
-- **`Gamut.from_xyz()`**: full pipeline from measurements to Lab surface; retains
-  D65 XYZ surface values on `gamut.xyz` for export and future analyses
+- **`Gamut.from_xyz()`**: full pipeline from measurements to Lab surface; extracts
+  the measured white point (RGB=max row) and scales D50 to the same luminance
+  (`D50_scaled = [0.9642, 1, 0.8249] × Y_white`) before Bradford CAT and Lab
+  conversion — matches `make_gamut_envelope.m` exactly, handles absolute-luminance
+  measurements (Y≈100 cd/m²) as well as normalised synthetic data (Y=1); retains
+  source-space XYZ surface values on `gamut.xyz` for export
 - **`Gamut.to_cgats()`**: writes CGE_ENVELOPE, CGE_MEASUREMENT, or combined file
   (`mode="envelope"` / `"measurement"` / `"all"`)
 - **`SyntheticGamut.to_cgats()`**: delegates to `gamut.to_cgats()`; XYZ available
   since `_build_gamut()` now stores source-space XYZ on the Gamut object
 - **`intersect_gamuts()`**: Gamut intersection via cylindrical map intersection
-- **Plotting**: `plot_surface()` and `plot_rings()` written and smoke-tested (Agg backend)
+- **Plotting**: `plot_surface()` and `plot_rings()` written and smoke-tested (Agg backend);
+  `plot_surface()` accepts an `ax` parameter so multiple gamuts can be overlaid on
+  one set of 3D axes
 - **`make_rgb_signals(m, bits)`**: normative RGB test signal set; m=5/7/9/11, arbitrary bit depth; exported from top-level package
 - **`SyntheticGamut.adobe_rgb()`**: Adobe RGB (1998) matching IEC 62906-6-1 Table B.1
 - **`Gamut.compute_rings()`** / **`SyntheticGamut.compute_rings()`**: returns `(l_steps, h_steps)` C\*_RSS array — normative ring metric in all three standards
@@ -39,6 +45,7 @@ Python implementation of gamut volume calculation for color displays. This is a 
 - BT.2020 volume confirmed larger than sRGB ✓
 - Intersection commutativity confirmed (A∩B == B∩A) ✓
 - Self-intersection confirmed (A∩A == A) ✓
+- Measured display files with absolute luminance (Y≈100 cd/m²) now normalised correctly against their own white point, matching MATLAB `make_gamut_envelope.m` output ✓
 
 ### Performance
 Full test suite runs in ~700 ms. Intersection tests run in ~50–100 ms each.
@@ -63,14 +70,19 @@ Optimisations applied (in order):
 - **`calculate compare`**: volume+delta mode (default), `--reference` coverage mode,
   `--matrix` pairwise intersection mode (entry (i,j) = % of column j covered by row i);
   `--reference` and `--matrix` are mutually exclusive
-- **`calculate`, `plot`, `generate`** command groups scaffolded; `plot` and `generate`
-  subcommands not yet implemented
 - **`_resolve.py`** shared helper: resolves CLI argument to `Gamut` — file path first,
   then named gamut, two-part error if neither matches
+- **`plot rings`**: 2D ring diagram; `--reference`, `--intersection`, `--output`,
+  `--show` (default when no `--output`), `--dpi`; accepts file paths or named gamuts
+- **`plot surface`**: 3D surface; one or more gamuts overlaid on shared axes;
+  `--output`, `--show`, `--dpi`, `--alpha`
+- **`generate rgb-signals`**: normative RGB test signal list; `--grid`, `--bits`,
+  `--format cgats/csv`
+- **`generate synthetic`**: CGE_MEASUREMENT / CGE_ENVELOPE / combined file for any
+  named reference gamut; `--mode`, `--output`
 
 ### Known Gaps
 1. **Intersection ring offset** — `compute_rings()` does not yet implement the IEC 62906-6-1 Formula 3 intersection ring offset variant; deferred until Annex A.3.3 can be verified against MATLAB
-2. **CLI `plot` and `generate` subcommands** — scaffolded but not yet implemented (TODO items 10–12)
 
 ## Architecture
 
@@ -186,9 +198,48 @@ dir_2d = np.array([np.sin(hue_mid), np.cos(hue_mid)])  # puts 0° along +b* axis
 
 **Bug fix applied:** `_build_rgb_to_xyz_matrix()` must return `M` not `M.T`. The matrix is used as `rgb @ M.T` for row-vector multiplication.
 
-### Chromatic Adaptation
+### Chromatic Adaptation (colorspace/adaptation.py)
 
-Uses Bradford transform. Source white comes from the gamut's white point (e.g., D65 for sRGB), destination is always D50 for Lab conversion.
+Uses Bradford transform. Two entry points:
+
+- **`chromatic_adaptation(xyz, source_white_xy, dest_white_xy)`** — takes xy
+  chromaticities; used for synthetic gamuts where the source white is a known
+  standard illuminant
+- **`chromatic_adaptation_xyz(xyz, source_white_xyz, dest_white_xyz)`** — takes XYZ
+  tristimulus values directly; mirrors MATLAB's `camcat_cc(XYZ, XYZn, D50)`; used by
+  `Gamut.from_xyz()` where the source white is extracted from measurement data
+
+### White-Point Normalisation in `Gamut.from_xyz()` — matching `make_gamut_envelope.m`
+
+This is a critical correctness requirement. Real display measurements have absolute
+XYZ values (peak white Y ≈ 100 cd/m²); synthetic reference gamuts use normalised
+values (Y = 1). The pipeline must work correctly for both.
+
+**Algorithm (matching MATLAB `make_gamut_envelope.m` exactly):**
+
+```python
+# 1. Find measured white point (XYZ where all RGB channels are at maximum)
+rgb_max = rgb.max()
+white_mask = np.all(np.abs(rgb - rgb_max) < 1e-6, axis=1)
+white_xyz = xyz[white_mask][0]          # XYZn in MATLAB
+
+# 2. Scale D50 reference white to the same luminance as the measured white
+#    Matches MATLAB: D50 = [0.9642, 1, 0.8249] * XYZn(2)
+d50_scaled = D50_WHITE_XYZ * white_xyz[1]
+
+# 3. Bradford CAT from measured white → luminance-scaled D50
+#    Matches MATLAB: XYZ = camcat_cc(XYZ, XYZn, D50)
+xyz_d50 = chromatic_adaptation_xyz(xyz_surface, white_xyz, d50_scaled)
+
+# 4. Convert to CIELab with luminance-scaled D50 as reference
+#    Matches MATLAB: CIELAB = xyz2lab(XYZ, D50)
+lab = xyz_to_lab(xyz_d50, white=d50_scaled)
+```
+
+For synthetic data (Y_white = 1): `d50_scaled = D50_WHITE_XYZ`, and the source white
+is the D65 XYZ at Y=1 — identical to the previous `adapt_d65_to_d50` behaviour.
+For measured displays (Y_white ≈ 100): the luminance scale cancels in the Lab
+conversion (XYZ/d50_scaled), giving correct Lab values regardless of absolute level.
 
 ## Public API
 
@@ -211,26 +262,17 @@ gamut = Gamut.from_cgats("measurements.txt")
 intersection = gamut.intersect(srgb)
 coverage = intersection.volume() / srgb.volume() * 100
 
-# Visualization (written, untested interactively)
+# Visualization
 gamut.plot_surface()
 gamut.plot_rings(reference=srgb)
 ```
 
 ## Next Steps
 
-### CLI — `plot rings` and `plot surface` (TODO item 10)
+### Intersection ring offset (Known Gap 1)
 
-Wrap `Gamut.plot_rings()` and `Gamut.plot_surface()` in the `plot` command group.
-Add `--output`, `--show`, `--reference`, `--mode intersection`, `--style`, `--dpi`.
-
-### CLI — `generate test-pattern` (TODO item 11)
-
-Wrap `make_rgb_signals(m, bits)` — flags `--grid`, `--bits`, `--format csv/cgats`.
-
-### CLI — `generate reference` (TODO item 12)
-
-Wrap `SyntheticGamut` + `Gamut.to_cgats()` for all five named gamuts and custom
-primaries (`--primaries`, `--white`, `--gamma`).
+`compute_rings()` does not yet implement the IEC 62906-6-1 Formula 3 intersection
+ring offset variant. Deferred until Annex A.3.3 can be verified against MATLAB.
 
 ## Development
 

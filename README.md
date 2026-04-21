@@ -164,6 +164,39 @@ cielab-tools calculate compare srgb bt.2020 dci-p3 display-p3 --matrix
 cielab-tools calculate compare srgb bt.2020 dci-p3 --matrix --format csv
 ```
 
+### Visualise gamut diagrams
+
+```bash
+# 2D ring diagram — shows gamut in a*-b* plane with L* encoded as ring radii
+cielab-tools plot rings display.txt
+cielab-tools plot rings display.txt --reference srgb
+cielab-tools plot rings display.txt --reference srgb --intersection
+
+# Save to file instead of opening a window
+cielab-tools plot rings display.txt --reference srgb --output rings.png
+cielab-tools plot rings display.txt --output rings.pdf --dpi 300
+
+# 3D surface plot in CIELab space
+cielab-tools plot surface display.txt
+
+# Overlay multiple gamuts on one set of axes (use alpha < 1 to see through)
+cielab-tools plot surface srgb bt.2020 --alpha 0.4
+cielab-tools plot surface display.txt srgb --alpha 0.5 --output comparison.png
+```
+
+### Generate reference files
+
+```bash
+# RGB test signal list for sending to a colorimeter/spectrometer
+cielab-tools generate rgb-signals                          # CGATS to stdout
+cielab-tools generate rgb-signals --output signals.txt
+cielab-tools generate rgb-signals --grid 11 --bits 255
+
+# Synthetic reference gamut envelopes
+cielab-tools generate synthetic srgb --output srgb_envelope.txt
+cielab-tools generate synthetic bt.2020 --mode measurement --output bt2020_meas.txt
+```
+
 ---
 
 ## How to Use (Python API)
