@@ -23,7 +23,9 @@
       "Read(//tmp/**)",
       "Bash(python \"C:/dev/IDMS/gamut-volume-py/extract_doc.py\")",
       "Bash(python \"C:/dev/IDMS/gamut-volume-py/extract_doc2.py\")",
-      "Bash(python \"C:/dev/IDMS/gamut-volume-py/check_doc2_end.py\")"
+      "Bash(python \"C:/dev/IDMS/gamut-volume-py/check_doc2_end.py\")",
+      "Bash(pip install *)",
+      "Bash(pytest tests/test_cli.py -v)"
     ]
   }
 }

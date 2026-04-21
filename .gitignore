@@ -89,3 +89,6 @@ standards
 
 # Agent
 .claude
+
+# Temporary command output
+tmp/

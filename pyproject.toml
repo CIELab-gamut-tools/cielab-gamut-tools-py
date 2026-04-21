@@ -37,6 +37,8 @@ dependencies = [
     "matplotlib>=3.5",
     "scipy>=1.7",
     "numba>=0.57",
+    "typer>=0.9",
+    "rich>=13.0",
 ]
 
 [project.optional-dependencies]
@@ -47,6 +49,10 @@ dev = [
     "ruff>=0.1",
     "hypothesis>=6.0",
 ]
+
+[project.scripts]
+cielab-gamut-tools = "cielab_gamut_tools.cli:main"
+cielab-tools = "cielab_gamut_tools.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/CIELab-gamut-tools/cielab-gamut-tools-py"
