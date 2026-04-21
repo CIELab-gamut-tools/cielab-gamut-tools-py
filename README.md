@@ -178,7 +178,7 @@ Start Python by typing `python` (Windows) or `python3` (macOS/Linux) in your ter
 >>> from cielab_gamut_tools import SyntheticGamut
 >>> srgb = SyntheticGamut.srgb()
 >>> print(srgb.volume())
-830330.5
+830807.1
 ```
 
 **Option 2: Run a Python script** (good for repeatable analysis)
@@ -243,7 +243,7 @@ plt.show()
 
 **Expected output:**
 ```
-sRGB gamut volume: 830331
+sRGB gamut volume: 830807
 Display gamut volume: 956234
 sRGB coverage: 98.3%
 ```
@@ -290,6 +290,27 @@ custom = SyntheticGamut(
     gamma=2.2
 )
 ```
+
+## Numerical Precision
+
+All three computation paths give the same volume result:
+
+| Path | sRGB example |
+|------|-------------|
+| `SyntheticGamut.srgb().volume()` | 830,807 |
+| `Gamut.from_cgats(measurement_file)` | 830,807 |
+| `Gamut.from_cgats(envelope_file)` | 830,807 |
+
+The MATLAB reference value for sRGB is 830,766, a difference of ~0.005%.
+The standards specify a tolerance of ±1%, so this is well within compliance.
+
+The small residual difference from the MATLAB reference is inherent to the
+algorithm: the cylindrical integration discretises the gamut surface into a
+finite triangular mesh (602 unique surface points, m=11 grid) in a nonlinear
+colour space.  This approximation error is the same regardless of whether the
+gamut was computed analytically or loaded from a CGATS file, because all paths
+use the same tessellation topology and an exact vertex lookup rather than
+interpolation.
 
 ## Troubleshooting
 

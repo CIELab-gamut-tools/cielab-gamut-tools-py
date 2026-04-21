@@ -15,8 +15,10 @@ Python implementation of gamut volume calculation for color displays. This is a 
 - **Tesselation**: RGB cube surface with correct triangle winding
 - **CGATS I/O**: generalised reader (`CgatsData`) and writer supporting any
   combination of RGB, XYZ, and LAB columns; auto-detects colorspace on read
-- **`_interpolate_colordata()`**: Scipy-based scattered interpolation for measured
-  data (used for both XYZ and LAB interpolation to surface points)
+- **`_expand_colordata_to_tesselation()`**: expands the 602 unique CGATS points
+  back to the 726-vertex tessellation via exact integer-space RGB lookup (matching
+  MATLAB's `map_rows.m`); falls back to scipy scattered interpolation only for
+  non-standard measurement grids
 - **`Gamut.from_cgats()`**: handles both CGE_MEASUREMENT (RGB+XYZ) and
   CGE_ENVELOPE (RGB+LAB) files; XYZ takes priority when both are present
 - **`Gamut.from_xyz()`**: full pipeline from measurements to Lab surface; retains
@@ -32,7 +34,8 @@ Python implementation of gamut volume calculation for color displays. This is a 
 - **`Gamut.compute_rings()`** / **`SyntheticGamut.compute_rings()`**: returns `(l_steps, h_steps)` C\*_RSS array — normative ring metric in all three standards
 
 ### Verified Results
-- `SyntheticGamut.srgb().volume()` → ~830,330 (MATLAB: 830,766, difference ~0.05%, within 1% tolerance)
+- `SyntheticGamut.srgb().volume()` → 830,807 (MATLAB: 830,766, difference ~0.005%, within 1% tolerance)
+- All three computation paths (direct, from measurement CGATS, from envelope CGATS) give identical results ✓
 - BT.2020 volume confirmed larger than sRGB ✓
 - Intersection commutativity confirmed (A∩B == B∩A) ✓
 - Self-intersection confirmed (A∩A == A) ✓
@@ -250,7 +253,7 @@ ruff check src tests      # Linting
 ### Quick Test
 ```python
 from cielab_gamut_tools import SyntheticGamut
-print(SyntheticGamut.srgb().volume())  # Should be ~830,330 (within 1% of MATLAB's 830,766)
+print(SyntheticGamut.srgb().volume())  # Should be ~830,807 (within 1% of MATLAB's 830,766)
 ```
 
 ## Reference Material
