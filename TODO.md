@@ -82,19 +82,34 @@ intersection-plot mode, and Adobe RGB. All pass with the Agg backend.
 
 These depend on the library items above. Implement in the order listed.
 
-### 7. CLI skeleton — Typer structure and `about` command
-Set up the Typer app with command groups (`calculate`, `plot`, `generate`, `report`
-stub, `ui` stub). Implement `about` first as it has no library dependencies and
-validates the structure.
+### 7. CLI skeleton — Typer structure and `about` command ✅ DONE
+**Completed.** Typer app in `src/cielab_gamut_tools/cli/` with command groups
+`calculate`, `plot`, `generate` (stubs) and a fully implemented `about` command.
+Two entry points registered: `cielab-gamut-tools` and `cielab-tools` (short alias).
+`--version` flag on the main app. `_resolve.py` shared helper resolves CLI arguments
+to `Gamut` objects — accepts either a CGATS file path or a named gamut
+(`srgb`, `bt.2020`, `dci-p3`, `display-p3`, `adobe-rgb`), with a clear two-part
+error message when neither matches.
 
-Add: `src/cielab_gamut_tools/cli/` package
+### 8. `calculate volume` and `calculate coverage` ✅ DONE
+**Completed.**
 
-### 8. `calculate volume` and `calculate coverage`
-Wrap existing `Gamut.volume()` and `Gamut.intersect()`. Support `--format text/json/csv`
-and `--standard` metadata. Multiple file support with tabulated output.
+- `calculate volume <file|name> [...]` — single or multiple gamuts; `--format
+  text/json/csv`; `--standard IDMS/IEC-62977/IEC-62906` appends traceability
+  metadata; `--quiet` for scripting; `--output` to file.
+- `calculate coverage <dut> --reference <ref>[,<ref>...]` — comma-separated
+  references; single-reference verbose text shows full breakdown; multiple
+  references render a rich table; same format/standard/quiet/output options.
+- Both commands accept named gamuts as positional arguments alongside file paths.
 
-### 9. `calculate compare`
-Pairwise comparison including `--matrix` mode.
+### 9. `calculate compare` ✅ DONE
+**Completed.** Three modes selected by flags:
+
+- **Default (volume):** volumes + delta % vs first gamut.
+- **`--reference <ref>`:** each gamut's coverage of a single reference.
+- **`--matrix`:** N×N pairwise intersection table; entry (i,j) = % of column
+  gamut j covered by row gamut i. `--reference` and `--matrix` are mutually
+  exclusive. All three modes support `--format text/json/csv`.
 
 ### 10. `plot rings` and `plot surface`
 Wrap existing plotting functions. Add `--mode intersection` for ring diagram (uses
@@ -107,9 +122,9 @@ Wrap the RGB signal generator from item 2. Support `--grid`, `--bits`, `--format
 Wrap `SyntheticGamut` + `Gamut.to_cgats()` (needs CGATS writer from item 1).
 Support all five named gamuts and custom primaries.
 
-### 13. CSV output — all `calculate` commands
-Ensure `--format csv` produces clean, header-rowed output suitable for direct import
-into Excel. Use consistent column naming across all subcommands.
+### 13. CSV output — all `calculate` commands ✅ DONE
+**Completed** as part of items 7–9. All `calculate` subcommands produce clean,
+header-rowed CSV via `--format csv`, with consistent snake_case column naming.
 
 ---
 

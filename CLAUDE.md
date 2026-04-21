@@ -49,8 +49,25 @@ Optimisations applied (in order):
 5. **Vectorised integration** — `_integrate_cylmap` is a single `np.sum` over a masked dense array; no loop
 6. **Numba warm-up at import** — both JIT functions are called with minimal dummy arrays at module load time, so cache-load cost is paid at import rather than on the first real computation
 
+### CLI — Working
+- **`cielab-tools` / `cielab-gamut-tools`**: two entry points, same Typer app
+- **`about`**: standards compliance, citation, algorithm description
+- **`calculate volume`**: single or multiple gamuts; named gamuts (`srgb`, `bt.2020`,
+  `dci-p3`, `display-p3`, `adobe-rgb`) accepted alongside file paths; `--format
+  text/json/csv`; `--standard` traceability metadata; `--quiet` for scripting
+- **`calculate coverage`**: DUT vs one or more comma-separated references; single-
+  reference text shows full breakdown; multiple references render a table
+- **`calculate compare`**: volume+delta mode (default), `--reference` coverage mode,
+  `--matrix` pairwise intersection mode (entry (i,j) = % of column j covered by row i);
+  `--reference` and `--matrix` are mutually exclusive
+- **`calculate`, `plot`, `generate`** command groups scaffolded; `plot` and `generate`
+  subcommands not yet implemented
+- **`_resolve.py`** shared helper: resolves CLI argument to `Gamut` — file path first,
+  then named gamut, two-part error if neither matches
+
 ### Known Gaps
 1. **Intersection ring offset** — `compute_rings()` does not yet implement the IEC 62906-6-1 Formula 3 intersection ring offset variant; deferred until Annex A.3.3 can be verified against MATLAB
+2. **CLI `plot` and `generate` subcommands** — scaffolded but not yet implemented (TODO items 10–12)
 
 ## Architecture
 
@@ -68,9 +85,18 @@ src/cielab_gamut_tools/
 ├── geometry/
 │   ├── tesselation.py    # RGB cube surface tesselation
 │   └── volume.py         # Cylindrical coordinate mapping & integration
-└── plotting/
-    ├── surface.py        # 3D gamut surface visualization
-    └── rings.py          # 2D gamut rings at L* slices
+├── plotting/
+│   ├── surface.py        # 3D gamut surface visualization
+│   └── rings.py          # 2D gamut rings at L* slices
+└── cli/
+    ├── __init__.py       # Exports main()
+    ├── _app.py           # Top-level Typer app, --version, command groups
+    ├── _resolve.py       # resolve_gamut(): file path or named gamut → Gamut
+    └── commands/
+        ├── about.py      # about command
+        ├── calculate.py  # volume, coverage, compare
+        ├── plot.py       # stub
+        └── generate.py   # stub
 ```
 
 ## Critical Implementation Details
@@ -189,10 +215,19 @@ gamut.plot_rings(reference=srgb)
 
 ## Next Steps
 
-### Test Plotting Interactively
+### CLI — `plot rings` and `plot surface` (TODO item 10)
 
-`plot_surface()` and `plot_rings()` are written but have no automated tests. Verify they
-produce correct figures with real data and add smoke tests (figure creation without errors).
+Wrap `Gamut.plot_rings()` and `Gamut.plot_surface()` in the `plot` command group.
+Add `--output`, `--show`, `--reference`, `--mode intersection`, `--style`, `--dpi`.
+
+### CLI — `generate test-pattern` (TODO item 11)
+
+Wrap `make_rgb_signals(m, bits)` — flags `--grid`, `--bits`, `--format csv/cgats`.
+
+### CLI — `generate reference` (TODO item 12)
+
+Wrap `SyntheticGamut` + `Gamut.to_cgats()` for all five named gamuts and custom
+primaries (`--primaries`, `--white`, `--gamma`).
 
 ## Development
 

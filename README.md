@@ -6,6 +6,7 @@ This is a Python port of the [gamut-volume-m](https://github.com/CIELab-gamut-to
 
 ## Features
 
+- **Command-line interface** — `cielab-tools calculate`, `plot`, `generate`, `about`
 - Load gamut data from CGATS.17 ASCII files or RGB/XYZ matrices
 - Support for emissive and reflective displays (IDMS v1.3 format)
 - Calculate gamut volumes via cylindrical integration in CIELab space
@@ -94,7 +95,78 @@ pip install -e .
 ```
 </details>
 
-## How to Use
+## Command-Line Interface
+
+After installation, two equivalent commands are available:
+
+```
+cielab-gamut-tools   # canonical name used in standards citations
+cielab-tools         # short alias for everyday use
+```
+
+### Standards and citation information
+
+```bash
+cielab-tools about
+```
+
+### Calculate gamut volume
+
+```bash
+# From a CGATS measurement file
+cielab-tools calculate volume display.txt
+
+# Using a built-in reference gamut
+cielab-tools calculate volume srgb
+
+# Multiple gamuts — tabulated output
+cielab-tools calculate volume display1.txt display2.txt srgb bt.2020
+
+# Machine-readable output
+cielab-tools calculate volume display.txt --format json
+cielab-tools calculate volume display.txt --format csv
+
+# Standards-traceable output
+cielab-tools calculate volume display.txt --standard IDMS --format json
+
+# Scripting (value only)
+cielab-tools calculate volume srgb --quiet
+```
+
+Named gamuts: `srgb`, `bt.2020`, `dci-p3`, `display-p3`, `adobe-rgb`.
+
+### Calculate gamut coverage
+
+```bash
+# Coverage against a single reference
+cielab-tools calculate coverage display.txt --reference srgb
+
+# Multiple references
+cielab-tools calculate coverage display.txt --reference srgb,bt.2020,dci-p3
+
+# CSV for Excel
+cielab-tools calculate coverage display.txt --reference srgb,bt.2020 --format csv
+```
+
+### Compare multiple gamuts
+
+```bash
+# Volume comparison — delta vs first
+cielab-tools calculate compare display1.txt display2.txt display3.txt
+
+# Coverage comparison against a reference
+cielab-tools calculate compare display1.txt display2.txt --reference srgb
+
+# Full pairwise intersection matrix
+cielab-tools calculate compare srgb bt.2020 dci-p3 display-p3 --matrix
+
+# Matrix as CSV
+cielab-tools calculate compare srgb bt.2020 dci-p3 --matrix --format csv
+```
+
+---
+
+## How to Use (Python API)
 
 There are two main ways to run Python code:
 
