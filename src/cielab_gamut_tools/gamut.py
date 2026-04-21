@@ -163,13 +163,32 @@ class Gamut:
             A new Gamut instance. ``gamut.xyz`` holds the D65 surface XYZ
             values (interpolated to tesselation points) for later export.
         """
-        from cielab_gamut_tools.colorspace.adaptation import adapt_d65_to_d50
-        from cielab_gamut_tools.colorspace.lab import xyz_to_lab
+        from cielab_gamut_tools.colorspace.adaptation import chromatic_adaptation_xyz
+        from cielab_gamut_tools.colorspace.lab import D50_WHITE_XYZ, xyz_to_lab
         from cielab_gamut_tools.geometry.tesselation import make_tesselation
 
         # Normalize RGB to [0, 1] if needed
         if rgb.max() > 1.0:
             rgb = rgb / 255.0
+
+        # Find the measured white point — XYZ row where all RGB channels are at
+        # their maximum value.  Matches MATLAB make_gamut_envelope.m:
+        #   RGBmax = max(RGB(:));
+        #   XYZn = XYZ(all(RGB==RGBmax,2),:);
+        rgb_max = rgb.max()
+        white_mask = np.all(np.abs(rgb - rgb_max) < 1e-6, axis=1)
+        white_rows = xyz[white_mask]
+        if len(white_rows) == 0:
+            raise ValueError(
+                "Cannot determine white point: no measurement row has all RGB "
+                "channels at their maximum value."
+            )
+        white_xyz = white_rows[0]  # XYZn
+
+        # Scale the D50 reference white to the same luminance as the measured
+        # white.  Matches MATLAB: D50 = [0.9642, 1, 0.8249] * XYZn(2)
+        # For normalised synthetic data XYZn(2)==1, so this is a no-op there.
+        d50_scaled = D50_WHITE_XYZ * white_xyz[1]
 
         # Create surface tesselation
         triangles, rgb_surface = make_tesselation()
@@ -177,11 +196,13 @@ class Gamut:
         # Expand 602 measured XYZ values to the 726 tessellation vertices
         xyz_surface = _expand_colordata_to_tesselation(rgb, xyz, rgb_surface)
 
-        # Chromatic adaptation D65 -> D50
-        xyz_d50 = adapt_d65_to_d50(xyz_surface)
+        # Bradford CAT from measured white to luminance-scaled D50.
+        # Matches MATLAB: XYZ = camcat_cc(XYZ, XYZn, D50)
+        xyz_d50 = chromatic_adaptation_xyz(xyz_surface, white_xyz, d50_scaled)
 
-        # Convert to CIELab
-        lab = xyz_to_lab(xyz_d50)
+        # Convert to CIELab using the luminance-scaled D50 as reference white.
+        # Matches MATLAB: CIELAB = xyz2lab(XYZ, D50)
+        lab = xyz_to_lab(xyz_d50, white=d50_scaled)
 
         return cls(lab, triangles, rgb=rgb_surface, xyz=xyz_surface, title=title)
 
