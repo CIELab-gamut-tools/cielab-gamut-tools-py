@@ -375,22 +375,31 @@ class TestWriteCgats:
         assert data.xyz is not None
         np.testing.assert_allclose(data.xyz, xyz, rtol=1e-5)
 
-    def test_integer_formatting(self, tmp_path):
-        """Integer-valued floats should be written without decimal point."""
+    def test_lab_fixed_point_formatting(self, tmp_path):
+        """LAB values should be written as fixed-point with 5 decimal places."""
         out = tmp_path / "out.txt"
         write_cgats(out, lab=np.array([[0.0, 0.0, 0.0]]))
         data_rows = self._read_section(out, "BEGIN_DATA", "END_DATA")
-        # All three LAB values and the SampleID should be bare integers
-        assert data_rows[0] == "1 0 0 0"
+        assert data_rows[0] == "1 0.00000 0.00000 0.00000"
 
-    def test_float_formatting(self, tmp_path):
-        """Non-integer floats should use %g formatting (no trailing zeros)."""
+    def test_xyz_fixed_point_formatting(self, tmp_path):
+        """XYZ values should be written as fixed-point with 7 decimal places."""
         out = tmp_path / "out.txt"
-        write_cgats(out, lab=np.array([[50.5, 0.0, -12.125]]))
+        write_cgats(out, xyz=np.array([[0.9642190, 1.0, 0.8251924]]))
         data_rows = self._read_section(out, "BEGIN_DATA", "END_DATA")
         parts = data_rows[0].split()
-        # 50.5 should not become 50.5000000 etc.
-        assert "." not in parts[2] or not parts[2].endswith("0")
+        for part in parts[1:]:  # skip SampleID
+            assert len(part.split(".")[1]) == 7
+
+    def test_lab_float_precision(self, tmp_path):
+        """LAB values should round-trip correctly at 5 d.p."""
+        out = tmp_path / "out.txt"
+        write_cgats(out, lab=np.array([[50.5, -12.125, 0.0]]))
+        data_rows = self._read_section(out, "BEGIN_DATA", "END_DATA")
+        parts = data_rows[0].split()
+        assert parts[1] == "50.50000"
+        assert parts[2] == "-12.12500"
+        assert parts[3] == "0.00000"
 
     # ── Sample ID tests ────────────────────────────────────────────────────
 
