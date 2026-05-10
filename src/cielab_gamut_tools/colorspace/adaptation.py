@@ -65,15 +65,41 @@ def chromatic_adaptation(
     Returns:
         Adapted XYZ values, same shape as input.
     """
-    xyz = np.asarray(xyz)
-
     # Convert white points from xy to XYZ
     source_white_XYZ = xy_to_XYZ(source_white_xy)
     dest_white_XYZ = xy_to_XYZ(dest_white_xy)
 
+    return chromatic_adaptation_xyz(xyz, source_white_XYZ, dest_white_XYZ)
+
+
+def chromatic_adaptation_xyz(
+    xyz: NDArray[np.floating],
+    source_white_xyz: NDArray[np.floating],
+    dest_white_xyz: NDArray[np.floating],
+) -> NDArray[np.floating]:
+    """
+    Apply Bradford chromatic adaptation transform using XYZ white points directly.
+
+    Mirrors MATLAB's ``camcat_cc(XYZ, XYZn, D50)``.  Accepts white points as
+    XYZ tristimulus values rather than xy chromaticities — use this when the
+    white point is known in XYZ (e.g. from a measurement row) rather than as a
+    standard-illuminant chromaticity.
+
+    Args:
+        xyz: XYZ tristimulus values, shape (N, 3) or (3,).
+        source_white_xyz: Source white point in XYZ, shape (3,).
+        dest_white_xyz: Destination white point in XYZ, shape (3,).
+
+    Returns:
+        Adapted XYZ values, same shape as input.
+    """
+    xyz = np.asarray(xyz)
+    source_white_xyz = np.asarray(source_white_xyz)
+    dest_white_xyz = np.asarray(dest_white_xyz)
+
     # Transform white points to cone response domain
-    source_lms = BRADFORD_M @ source_white_XYZ
-    dest_lms = BRADFORD_M @ dest_white_XYZ
+    source_lms = BRADFORD_M @ source_white_xyz
+    dest_lms = BRADFORD_M @ dest_white_xyz
 
     # Compute adaptation matrix
     scale = dest_lms / source_lms

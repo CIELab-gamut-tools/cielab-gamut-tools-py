@@ -115,12 +115,25 @@ error message when neither matches.
 Wrap existing plotting functions. Add `--mode intersection` for ring diagram (uses
 `compute_rings()` from item 3). Support all style presets and output formats.
 
-### 11. `generate test-pattern`
-Wrap the RGB signal generator from item 2. Support `--grid`, `--bits`, `--format csv`.
+### 11. `generate rgb-signals` ✅ DONE
+**Completed.** `cielab-tools generate rgb-signals` wraps `make_rgb_signals()`.
+- `--grid` / `-g`: grid size m (default 11, gives 602 signals)
+- `--bits` / `-b`: output bit depth (default 8)
+- `--format csv/cgats` (default cgats): CSV has R,G,B header; CGATS uses
+  `IDMS_FILE_TYPE CGE_SIGNALS` with standard column layout
+- `--output` / `-o`: file path; defaults to stdout
+- Named `rgb-signals` (not `test-pattern`) to avoid confusion with full-frame
+  display test images; leaves namespace open for future HDR signal variants.
 
-### 12. `generate reference`
-Wrap `SyntheticGamut` + `Gamut.to_cgats()` (needs CGATS writer from item 1).
-Support all five named gamuts and custom primaries.
+### 12. `generate synthetic` ✅ DONE
+**Completed.** `cielab-tools generate synthetic` wraps `SyntheticGamut` +
+`Gamut.to_cgats()`. Named `synthetic` rather than `reference` — not all
+generated gamuts are official references.
+- Positional named gamut: `srgb`, `bt.2020`, `dci-p3`, `display-p3`, `adobe-rgb`
+- Custom primaries: `--primaries rx,ry,gx,gy,bx,by --white wx,wy [--gamma G]`
+- Named gamut and `--primaries` are mutually exclusive
+- `--mode envelope/measurement/all` (default envelope)
+- `--output` / `-o`: file path; defaults to stdout
 
 ### 13. CSV output — all `calculate` commands ✅ DONE
 **Completed** as part of items 7–9. All `calculate` subcommands produce clean,

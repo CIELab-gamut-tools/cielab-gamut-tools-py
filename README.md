@@ -164,6 +164,39 @@ cielab-tools calculate compare srgb bt.2020 dci-p3 display-p3 --matrix
 cielab-tools calculate compare srgb bt.2020 dci-p3 --matrix --format csv
 ```
 
+### Visualise gamut diagrams
+
+```bash
+# 2D ring diagram — shows gamut in a*-b* plane with L* encoded as ring radii
+cielab-tools plot rings display.txt
+cielab-tools plot rings display.txt --reference srgb
+cielab-tools plot rings display.txt --reference srgb --intersection
+
+# Save to file instead of opening a window
+cielab-tools plot rings display.txt --reference srgb --output rings.png
+cielab-tools plot rings display.txt --output rings.pdf --dpi 300
+
+# 3D surface plot in CIELab space
+cielab-tools plot surface display.txt
+
+# Overlay multiple gamuts on one set of axes (use alpha < 1 to see through)
+cielab-tools plot surface srgb bt.2020 --alpha 0.4
+cielab-tools plot surface display.txt srgb --alpha 0.5 --output comparison.png
+```
+
+### Generate reference files
+
+```bash
+# RGB test signal list for sending to a colorimeter/spectrometer
+cielab-tools generate rgb-signals                          # CGATS to stdout
+cielab-tools generate rgb-signals --output signals.txt
+cielab-tools generate rgb-signals --grid 11 --bits 255
+
+# Synthetic reference gamut envelopes
+cielab-tools generate synthetic srgb --output srgb_envelope.txt
+cielab-tools generate synthetic bt.2020 --mode measurement --output bt2020_meas.txt
+```
+
 ---
 
 ## How to Use (Python API)
@@ -178,7 +211,7 @@ Start Python by typing `python` (Windows) or `python3` (macOS/Linux) in your ter
 >>> from cielab_gamut_tools import SyntheticGamut
 >>> srgb = SyntheticGamut.srgb()
 >>> print(srgb.volume())
-830330.5
+830807.1
 ```
 
 **Option 2: Run a Python script** (good for repeatable analysis)
@@ -243,7 +276,7 @@ plt.show()
 
 **Expected output:**
 ```
-sRGB gamut volume: 830331
+sRGB gamut volume: 830807
 Display gamut volume: 956234
 sRGB coverage: 98.3%
 ```
@@ -290,6 +323,27 @@ custom = SyntheticGamut(
     gamma=2.2
 )
 ```
+
+## Numerical Precision
+
+All three computation paths give the same volume result:
+
+| Path | sRGB example |
+|------|-------------|
+| `SyntheticGamut.srgb().volume()` | 830,807 |
+| `Gamut.from_cgats(measurement_file)` | 830,807 |
+| `Gamut.from_cgats(envelope_file)` | 830,807 |
+
+The MATLAB reference value for sRGB is 830,766, a difference of ~0.005%.
+The standards specify a tolerance of ±1%, so this is well within compliance.
+
+The small residual difference from the MATLAB reference is inherent to the
+algorithm: the cylindrical integration discretises the gamut surface into a
+finite triangular mesh (602 unique surface points, m=11 grid) in a nonlinear
+colour space.  This approximation error is the same regardless of whether the
+gamut was computed analytically or loaded from a CGATS file, because all paths
+use the same tessellation topology and an exact vertex lookup rather than
+interpolation.
 
 ## Troubleshooting
 

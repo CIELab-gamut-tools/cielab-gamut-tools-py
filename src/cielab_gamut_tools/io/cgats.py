@@ -166,19 +166,24 @@ def write_cgats(
     else:
         ids = np.asarray(sample_ids, dtype=np.float64)
 
-    # Build field list and data matrix
+    # Build field list, data matrix, and per-column format strings.
+    # SampleID and RGB are integers; XYZ uses 7 d.p. fixed; LAB uses 5 d.p. fixed.
     fields: list[str] = ["SampleID"]
     columns: list[NDArray] = [ids.reshape(-1, 1)]
+    col_fmts: list[str] = [".0f"]
 
     if rgb is not None:
         fields += ["RGB_R", "RGB_G", "RGB_B"]
         columns.append(np.asarray(rgb, dtype=np.float64))
+        col_fmts += [".0f", ".0f", ".0f"]
     if xyz is not None:
         fields += ["XYZ_X", "XYZ_Y", "XYZ_Z"]
         columns.append(np.asarray(xyz, dtype=np.float64))
+        col_fmts += [".7f", ".7f", ".7f"]
     if lab is not None:
         fields += ["LAB_L", "LAB_A", "LAB_B"]
         columns.append(np.asarray(lab, dtype=np.float64))
+        col_fmts += [".5f", ".5f", ".5f"]
 
     data = np.hstack(columns)
 
@@ -198,7 +203,7 @@ def write_cgats(
         f.write(f"NUMBER_OF_SETS\t{n}\n")
         f.write("BEGIN_DATA\n")
         for row in data:
-            f.write(" ".join(f"{v:g}" for v in row) + "\n")
+            f.write(" ".join(f"{v:{fmt}}" for v, fmt in zip(row, col_fmts)) + "\n")
         f.write("END_DATA\n")
 
 

@@ -11,8 +11,11 @@ import numpy as np
 from numpy.typing import NDArray
 
 
-# D50 reference white XYZ values (Y=1 normalization)
-D50_WHITE_XYZ = np.array([0.96422, 1.0, 0.82521])
+# D50 reference white XYZ, computed from xy chromaticity to match the Bradford
+# adaptation in adaptation.py (which also derives dest_white_XYZ via xy_to_XYZ).
+# Using the same derivation ensures RGB white maps to exactly (100, 0, 0) in Lab.
+_D50_x, _D50_y = 0.34567, 0.35850
+D50_WHITE_XYZ = np.array([_D50_x / _D50_y, 1.0, (1.0 - _D50_x - _D50_y) / _D50_y])
 
 # CIELab conversion constants
 EPSILON = 216 / 24389  # (6/29)^3
