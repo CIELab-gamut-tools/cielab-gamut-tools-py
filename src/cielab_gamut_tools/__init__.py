@@ -29,5 +29,9 @@ from cielab_gamut_tools.gamut import Gamut
 from cielab_gamut_tools.measurement import make_rgb_signals
 from cielab_gamut_tools.synthetic import SyntheticGamut
 
-__version__ = "0.1.0"
+try:
+    from importlib.metadata import version as _version, PackageNotFoundError as _PackageNotFoundError
+    __version__ = _version("cielab-gamut-tools")
+except _PackageNotFoundError:
+    __version__ = "unknown"
 __all__ = ["Gamut", "SyntheticGamut", "make_rgb_signals"]
