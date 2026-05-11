@@ -53,40 +53,41 @@ pip install --force-reinstall cielab-gamut-tools
 
 ## Command-line usage
 
-After installation, two equivalent commands are available:
+After installation, three equivalent commands are available:
 
 ```
 cielab-gamut-tools   # canonical name used in standards citations
-cielab-tools         # short alias for everyday use
+cielab-tools         # short alias
+cgt                  # shortest alias for everyday use
 ```
 
 ### Standards and citation information
 
 ```bash
-cielab-tools about
+cgt about
 ```
 
 ### Calculate gamut volume
 
 ```bash
 # From a CGATS measurement file
-cielab-tools calculate volume display.txt
+cgt calculate volume display.txt
 
 # Named reference gamut
-cielab-tools calculate volume srgb
+cgt calculate volume srgb
 
 # Multiple gamuts — tabulated output
-cielab-tools calculate volume display1.txt display2.txt srgb bt.2020
+cgt calculate volume display1.txt display2.txt srgb bt.2020
 
 # Machine-readable output
-cielab-tools calculate volume display.txt --format json
-cielab-tools calculate volume display.txt --format csv
+cgt calculate volume display.txt -f json
+cgt calculate volume display.txt -f csv
 
 # Standards-traceable output (appends algorithm metadata)
-cielab-tools calculate volume display.txt --standard IDMS --format json
+cgt calculate volume display.txt -s IDMS -f json
 
 # Value only, for scripting
-cielab-tools calculate volume srgb --quiet
+cgt calculate volume srgb -q
 ```
 
 Named gamuts: `srgb`, `bt.2020`, `dci-p3`, `display-p3`, `adobe-rgb`.
@@ -95,65 +96,65 @@ Named gamuts: `srgb`, `bt.2020`, `dci-p3`, `display-p3`, `adobe-rgb`.
 
 ```bash
 # Coverage against a single reference
-cielab-tools calculate coverage display.txt --reference srgb
+cgt calculate coverage display.txt -r srgb
 
 # Multiple references in one pass
-cielab-tools calculate coverage display.txt --reference srgb,bt.2020,dci-p3
+cgt calculate coverage display.txt -r srgb,bt.2020,dci-p3
 
 # CSV for spreadsheet import
-cielab-tools calculate coverage display.txt --reference srgb,bt.2020 --format csv
+cgt calculate coverage display.txt -r srgb,bt.2020 -f csv
 ```
 
 ### Compare multiple gamuts
 
 ```bash
 # Volume comparison — delta vs first gamut
-cielab-tools calculate compare display1.txt display2.txt display3.txt
+cgt calculate compare display1.txt display2.txt display3.txt
 
 # Coverage of each against a single reference
-cielab-tools calculate compare display1.txt display2.txt --reference srgb
+cgt calculate compare display1.txt display2.txt -r srgb
 
 # Full pairwise intersection matrix (entry (i,j) = % of gamut j covered by gamut i)
-cielab-tools calculate compare srgb bt.2020 dci-p3 display-p3 --matrix
-cielab-tools calculate compare srgb bt.2020 dci-p3 --matrix --format csv
+cgt calculate compare srgb bt.2020 dci-p3 display-p3 -m
+cgt calculate compare srgb bt.2020 dci-p3 -m -f csv
 ```
 
 ### Visualise gamut diagrams
 
 ```bash
 # 2D ring diagram (a*-b* plane, L* encoded as ring radii)
-cielab-tools plot rings display.txt
-cielab-tools plot rings display.txt --reference srgb
-cielab-tools plot rings display.txt --reference srgb --intersection
+cgt plot rings display.txt
+cgt plot rings display.txt -r srgb
+cgt plot rings display.txt -r srgb -i
 
 # Save to file
-cielab-tools plot rings display.txt --reference srgb --output rings.png
-cielab-tools plot rings display.txt --output rings.pdf --dpi 300
+cgt plot rings display.txt -r srgb -o rings.png
+cgt plot rings display.txt -o rings.pdf --dpi 300
 
 # 3D surface in CIELab space
-cielab-tools plot surface display.txt
+cgt plot surface display.txt
 
 # Overlay multiple gamuts (use --alpha < 1 to see through surfaces)
-cielab-tools plot surface srgb bt.2020 --alpha 0.4
-cielab-tools plot surface display.txt srgb --alpha 0.5 --output comparison.png
+cgt plot surface srgb bt.2020 --alpha 0.4
+cgt plot surface display.txt srgb --alpha 0.5 -o comparison.png
 ```
 
 ### Generate reference files
 
 ```bash
 # RGB test signal list for measurement (normative 602-point set, m=11)
-cielab-tools generate rgb-signals                          # CGATS to stdout
-cielab-tools generate rgb-signals --output signals.txt
-cielab-tools generate rgb-signals --grid 9 --bits 10      # reduced grid, 10-bit
+cgt generate rgb-signals                     # CGATS to stdout
+cgt generate rgb-signals -o signals.txt
+cgt generate rgb-signals -g 9 -b 10         # reduced grid, 10-bit
 
 # Synthetic reference gamut as CGATS file
-cielab-tools generate synthetic srgb --output srgb_envelope.txt
-cielab-tools generate synthetic bt.2020 --mode measurement --output bt2020_meas.txt
+cgt generate synthetic srgb -o srgb_envelope.txt
+cgt generate synthetic bt.2020 -m measurement -o bt2020_meas.txt
 
 # Custom primaries
-cielab-tools generate synthetic \
+cgt generate synthetic \
     --primaries 0.64,0.33,0.21,0.71,0.15,0.06 \
-    --white 0.3127,0.3290 --gamma 2.2 --output custom.txt
+    --white 0.3127,0.3290 --gamma 2.2 -o custom.txt
 ```
 
 ---

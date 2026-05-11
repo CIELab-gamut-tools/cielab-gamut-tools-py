@@ -63,7 +63,7 @@ def rings(
     intersection: Annotated[
         bool,
         typer.Option(
-            "--intersection",
+            "--intersection", "-i",
             help="Show gamut rings as intersection of DUT and reference (requires --reference).",
         ),
     ] = False,

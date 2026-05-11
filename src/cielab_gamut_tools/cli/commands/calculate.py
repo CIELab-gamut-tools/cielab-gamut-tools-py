@@ -69,7 +69,7 @@ def volume(
     ] = OutputFormat.text,
     standard: Annotated[
         Optional[Standard],
-        typer.Option("--standard", help="Append standards traceability metadata."),
+        typer.Option("--standard", "-s", help="Append standards traceability metadata."),
     ] = None,
     output: Annotated[
         Optional[Path],
@@ -168,7 +168,7 @@ def coverage(
     ] = OutputFormat.text,
     standard: Annotated[
         Optional[Standard],
-        typer.Option("--standard", help="Append standards traceability metadata."),
+        typer.Option("--standard", "-s", help="Append standards traceability metadata."),
     ] = None,
     output: Annotated[
         Optional[Path],
@@ -324,7 +324,7 @@ def compare(
     matrix: Annotated[
         bool,
         typer.Option(
-            "--matrix",
+            "--matrix", "-m",
             help="Show full pairwise intersection matrix. Mutually exclusive with --reference.",
         ),
     ] = False,
@@ -334,7 +334,7 @@ def compare(
     ] = OutputFormat.text,
     standard: Annotated[
         Optional[Standard],
-        typer.Option("--standard", help="Append standards traceability metadata."),
+        typer.Option("--standard", "-s", help="Append standards traceability metadata."),
     ] = None,
     output: Annotated[
         Optional[Path],

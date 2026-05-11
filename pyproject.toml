@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "cielab-gamut-tools"
-version = "0.1.0"
+version = "0.2.1"
 description = "Calculate and visualize CIELab colour gamuts of displays"
 readme = "README.md"
 license = "MIT"
@@ -53,6 +53,7 @@ dev = [
 [project.scripts]
 cielab-gamut-tools = "cielab_gamut_tools.cli:main"
 cielab-tools = "cielab_gamut_tools.cli:main"
+cgt = "cielab_gamut_tools.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/CIELab-gamut-tools/cielab-gamut-tools-py"
