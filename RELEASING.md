@@ -35,6 +35,7 @@ git push && git push --tags
 ### 3. Build and publish
 
 ```cmd
+rmdir /s /q dist
 hatch build
 hatch publish
 ```
@@ -43,12 +44,6 @@ That's it. Verify the new version is live:
 
 ```cmd
 pip index versions cielab-gamut-tools
-```
-
-### Clean up between releases
-
-```cmd
-rmdir /s /q dist
 ```
 
 ---
