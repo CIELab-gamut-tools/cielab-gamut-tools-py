@@ -98,7 +98,7 @@ def rings(
 
     from cielab_gamut_tools.plotting.rings import plot_rings
 
-    fig = plot_rings(
+    fig, _ax = plot_rings(
         dut_gamut,
         reference=ref_gamut,
         intersection_plot=intersection,

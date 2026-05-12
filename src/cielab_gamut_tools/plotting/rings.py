@@ -79,7 +79,7 @@ def plot_rings(
     # Axes
     ax: "Axes | None" = None,
     clear_axes: bool = True,
-) -> "Figure":
+) -> "tuple[Figure, Axes]":
     """
     Create a 2D gamut rings plot in the a*-b* plane.
 
@@ -156,7 +156,7 @@ def plot_rings(
         clear_axes: Clear the axes before plotting (default ``True``).
 
     Returns:
-        The matplotlib Figure containing the plot.
+        A ``(Figure, Axes)`` tuple for the plot.
     """
     import matplotlib.pyplot as plt
 
@@ -329,7 +329,7 @@ def plot_rings(
         ax.set_title(f"CIELab gamut rings\nVolume = {vol_label:.0f}")
 
     fig.tight_layout()
-    return fig
+    return fig, ax
 
 
 # ═══════════════════════════════════════════════════════════════════════════

@@ -138,7 +138,7 @@ generated gamuts are official references.
 **Completed** as part of items 7–9. All `calculate` subcommands produce clean,
 header-rowed CSV via `--format csv`, with consistent snake_case column naming.
 
-### 16. Return `(fig, ax)` from plotting functions — API consistency
+### 16. Return `(fig, ax)` from plotting functions — API consistency ✅ DONE
 
 `plot_rings()` and `plot_surface()` currently return only a `Figure`. API consumers
 who want to customise the plot after the call must use `fig.axes[0]`, which is

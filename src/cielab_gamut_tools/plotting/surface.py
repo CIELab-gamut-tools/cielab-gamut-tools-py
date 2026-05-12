@@ -20,7 +20,7 @@ def plot_surface(
     ax: "Axes | None" = None,
     alpha: float = 0.8,
     show_axes: bool = True,
-) -> "Figure":
+) -> "tuple[Figure, Axes]":
     """
     Create a 3D surface plot of the gamut in CIELab space.
 
@@ -33,7 +33,7 @@ def plot_surface(
         show_axes: Whether to show axis labels and grid.
 
     Returns:
-        The matplotlib Figure containing the plot.
+        A ``(Figure, Axes)`` tuple for the plot.
     """
     import matplotlib.pyplot as plt
     from mpl_toolkits.mplot3d.art3d import Poly3DCollection
@@ -93,4 +93,4 @@ def plot_surface(
     ax.set_ylim(-128, 128)
     ax.set_zlim(0, 100)
 
-    return fig
+    return fig, ax

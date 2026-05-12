@@ -13,6 +13,9 @@ from numpy.typing import NDArray
 if TYPE_CHECKING:
     from pathlib import Path
 
+    from matplotlib.axes import Axes
+    from matplotlib.figure import Figure
+
 
 # Standard illuminant white points (CIE xy chromaticity)
 D65_WHITE = np.array([0.31272, 0.32903])
@@ -195,8 +198,8 @@ class SyntheticGamut:
         """Compute intersection with another gamut."""
         return self.gamut.intersect(other)
 
-    def plot_surface(self, **kwargs) -> "Figure":
-        """Create a 3D surface plot."""
+    def plot_surface(self, **kwargs) -> "tuple[Figure, Axes]":
+        """Create a 3D surface plot. Returns ``(Figure, Axes)``."""
         return self.gamut.plot_surface(**kwargs)
 
     def to_cgats(self, path: "str | Path", **kwargs) -> None:
@@ -208,8 +211,8 @@ class SyntheticGamut:
         reference=None,
         reference2=None,
         **kwargs,
-    ) -> "Figure":
-        """Create a 2D gamut rings plot. All kwargs forwarded to ``plot_rings()``."""
+    ) -> "tuple[Figure, Axes]":
+        """Create a 2D gamut rings plot. Returns ``(Figure, Axes)``. All kwargs forwarded to ``plot_rings()``."""
         return self.gamut.plot_rings(reference=reference, reference2=reference2, **kwargs)
 
 

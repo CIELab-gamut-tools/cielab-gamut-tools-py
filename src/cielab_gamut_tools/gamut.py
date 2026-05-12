@@ -415,7 +415,7 @@ class Gamut:
         self,
         ax: Axes | None = None,
         alpha: float = 0.8,
-    ) -> Figure:
+    ) -> tuple[Figure, Axes]:
         """
         Create a 3D surface plot of the gamut.
 
@@ -424,7 +424,7 @@ class Gamut:
             alpha: Surface transparency (0-1).
 
         Returns:
-            The matplotlib Figure containing the plot.
+            A ``(Figure, Axes)`` tuple for the plot.
         """
         from cielab_gamut_tools.plotting.surface import plot_surface
 
@@ -435,7 +435,7 @@ class Gamut:
         reference: Gamut | SyntheticGamut | None = None,
         reference2: Gamut | SyntheticGamut | None = None,
         **kwargs,
-    ) -> Figure:
+    ) -> tuple[Figure, Axes]:
         """
         Create a 2D gamut rings plot in the a*-b* plane.
 
@@ -449,7 +449,7 @@ class Gamut:
                 ``plot_rings()`` — see that function for the full list.
 
         Returns:
-            The matplotlib Figure containing the plot.
+            A ``(Figure, Axes)`` tuple for the plot.
         """
         from cielab_gamut_tools.plotting.rings import plot_rings
 
