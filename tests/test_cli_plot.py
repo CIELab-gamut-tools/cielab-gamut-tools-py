@@ -52,9 +52,29 @@ class TestPlotErrorCases:
         result = runner.invoke(app, ["plot", "rings", "srgb", "--intersection", "--show"])
         assert result.exit_code != 0
 
+    def test_rings_ring_reference_without_reference_fails(self):
+        result = runner.invoke(
+            app, ["plot", "rings", "srgb", "--ring-reference", "ref", "--show"]
+        )
+        assert result.exit_code != 0
+
     def test_rings_unsupported_format_fails(self, tmp_path):
         out = tmp_path / "plot.bmp"
         result = runner.invoke(app, ["plot", "rings", "srgb", "--output", str(out)])
+        assert result.exit_code != 0
+
+    def test_rings_bad_xlim_fails(self, tmp_path):
+        out = tmp_path / "rings.png"
+        result = runner.invoke(
+            app, ["plot", "rings", "srgb", "--xlim=bad,values", "--output", str(out)]
+        )
+        assert result.exit_code != 0
+
+    def test_rings_bad_figsize_fails(self, tmp_path):
+        out = tmp_path / "rings.png"
+        result = runner.invoke(
+            app, ["plot", "rings", "srgb", "--figsize=10", "--output", str(out)]
+        )
         assert result.exit_code != 0
 
 
@@ -130,6 +150,124 @@ class TestPlotRingsSave:
         )
         assert result.exit_code == 0, result.output
         assert out.exists()
+
+
+# ---------------------------------------------------------------------------
+# rings — new options (item 17)
+# ---------------------------------------------------------------------------
+
+class TestPlotRingsNewOptions:
+    def test_no_bands(self, tmp_path):
+        out = tmp_path / "rings.png"
+        result = runner.invoke(
+            app, ["plot", "rings", "srgb", "--no-bands", "--output", str(out)]
+        )
+        assert result.exit_code == 0, result.output
+        assert out.exists()
+
+    def test_band_chroma(self, tmp_path):
+        out = tmp_path / "rings.png"
+        result = runner.invoke(
+            app, ["plot", "rings", "srgb", "--band-chroma", "30", "--output", str(out)]
+        )
+        assert result.exit_code == 0, result.output
+
+    def test_band_ls_range(self, tmp_path):
+        out = tmp_path / "rings.png"
+        result = runner.invoke(
+            app, ["plot", "rings", "srgb", "--band-ls=30,80", "--output", str(out)]
+        )
+        assert result.exit_code == 0, result.output
+
+    def test_primaries_none(self, tmp_path):
+        out = tmp_path / "rings.png"
+        result = runner.invoke(
+            app, ["plot", "rings", "srgb", "--primaries", "none", "--output", str(out)]
+        )
+        assert result.exit_code == 0, result.output
+
+    def test_primaries_all(self, tmp_path):
+        out = tmp_path / "rings.png"
+        result = runner.invoke(
+            app, ["plot", "rings", "srgb", "--primaries", "all", "--output", str(out)]
+        )
+        assert result.exit_code == 0, result.output
+
+    def test_reference2(self, tmp_path):
+        out = tmp_path / "rings.png"
+        result = runner.invoke(
+            app,
+            ["plot", "rings", "srgb", "--reference2", "bt.2020", "--output", str(out)],
+        )
+        assert result.exit_code == 0, result.output
+
+    def test_ring_reference_ref(self, tmp_path):
+        out = tmp_path / "rings.png"
+        result = runner.invoke(
+            app,
+            [
+                "plot", "rings", "srgb",
+                "--reference", "bt.2020",
+                "--ring-reference", "ref",
+                "--output", str(out),
+            ],
+        )
+        assert result.exit_code == 0, result.output
+
+    def test_ring_reference_intersection(self, tmp_path):
+        out = tmp_path / "rings.png"
+        result = runner.invoke(
+            app,
+            [
+                "plot", "rings", "srgb",
+                "--reference", "bt.2020",
+                "--ring-reference", "intersection",
+                "--output", str(out),
+            ],
+        )
+        assert result.exit_code == 0, result.output
+
+    def test_chroma_rings(self, tmp_path):
+        out = tmp_path / "rings.png"
+        result = runner.invoke(
+            app,
+            ["plot", "rings", "srgb", "--chroma-rings", "50,100,150", "--output", str(out)],
+        )
+        assert result.exit_code == 0, result.output
+
+    def test_title_override(self, tmp_path):
+        out = tmp_path / "rings.png"
+        result = runner.invoke(
+            app,
+            ["plot", "rings", "srgb", "--title", "My display", "--output", str(out)],
+        )
+        assert result.exit_code == 0, result.output
+
+    def test_no_title(self, tmp_path):
+        out = tmp_path / "rings.png"
+        result = runner.invoke(
+            app, ["plot", "rings", "srgb", "--no-title", "--output", str(out)]
+        )
+        assert result.exit_code == 0, result.output
+
+    def test_figsize(self, tmp_path):
+        out = tmp_path / "rings.png"
+        result = runner.invoke(
+            app, ["plot", "rings", "srgb", "--figsize=10,10", "--output", str(out)]
+        )
+        assert result.exit_code == 0, result.output
+
+    def test_xlim_ylim(self, tmp_path):
+        out = tmp_path / "rings.png"
+        result = runner.invoke(
+            app,
+            [
+                "plot", "rings", "srgb",
+                "--xlim=-150,150", "--ylim=-150,150",
+                "--output", str(out),
+            ],
+        )
+        assert result.exit_code == 0, result.output
 
 
 # ---------------------------------------------------------------------------

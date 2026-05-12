@@ -79,6 +79,11 @@ def plot_rings(
     # Axes
     ax: "Axes | None" = None,
     clear_axes: bool = True,
+    figsize: tuple[float, float] = (8.0, 8.0),
+    # Post-layout overrides (applied before tight_layout)
+    title: "str | None | Literal['auto']" = "auto",
+    xlim: "tuple[float, float] | None" = None,
+    ylim: "tuple[float, float] | None" = None,
 ) -> "tuple[Figure, Axes]":
     """
     Create a 2D gamut rings plot in the a*-b* plane.
@@ -154,6 +159,14 @@ def plot_rings(
             circles (default ``[]``).
         ax: Optional matplotlib axes. If ``None``, a new figure is created.
         clear_axes: Clear the axes before plotting (default ``True``).
+        figsize: Figure size in inches as ``(width, height)`` (default
+            ``(8, 8)``). Ignored when ``ax`` is supplied.
+        title: Axes title. ``"auto"`` (default) generates
+            ``"CIELab gamut rings / <name> / Volume = N"``.  ``None``
+            suppresses the title entirely.  Any other string is used as-is.
+        xlim: Override the a* axis limits as ``(min, max)``. Default is
+            auto-calculated from the ring extent.
+        ylim: Override the b* axis limits as ``(min, max)``.
 
     Returns:
         A ``(Figure, Axes)`` tuple for the plot.
@@ -195,7 +208,7 @@ def plot_rings(
 
     # ── Set up axes ────────────────────────────────────────────────────────
     if ax is None:
-        fig, ax = plt.subplots(figsize=(8, 8))
+        fig, ax = plt.subplots(figsize=figsize)
     else:
         fig = ax.get_figure()
 
@@ -321,14 +334,24 @@ def plot_rings(
     ax.set_xlabel("a*$_{RSS}$")
     ax.set_ylabel("b*$_{RSS}$")
 
-    gamut_title = getattr(_g, "title", None) or ""
-    vol_label = orig_vol if orig_vol is not None else test_vol
-    if gamut_title:
-        ax.set_title(f"CIELab gamut rings\n{gamut_title}\nVolume = {vol_label:.0f}")
-    else:
-        ax.set_title(f"CIELab gamut rings\nVolume = {vol_label:.0f}")
+    if title == "auto":
+        gamut_title = getattr(_g, "title", None) or ""
+        vol_label = orig_vol if orig_vol is not None else test_vol
+        if gamut_title:
+            ax.set_title(f"CIELab gamut rings\n{gamut_title}\nVolume = {vol_label:.0f}")
+        else:
+            ax.set_title(f"CIELab gamut rings\nVolume = {vol_label:.0f}")
+    elif title is not None:
+        ax.set_title(title)
 
     fig.tight_layout()
+
+    # Apply custom limit overrides after tight_layout so it doesn't warn
+    if xlim is not None:
+        ax.set_xlim(*xlim)
+    if ylim is not None:
+        ax.set_ylim(*ylim)
+
     return fig, ax
 
 
