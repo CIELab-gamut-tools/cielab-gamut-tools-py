@@ -157,7 +157,7 @@ Scope:
 
 This is a 0.x release; the breaking change is acceptable.
 
-### 17. `plot rings` CLI — parity with programmatic API
+### 17. `plot rings` CLI — parity with programmatic API ✅ DONE
 
 The CLI currently exposes only `--reference` and `--intersection`. Add the following
 options (all directly map to existing `plot_rings()` parameters):

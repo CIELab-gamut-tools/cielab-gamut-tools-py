@@ -25,6 +25,16 @@ class _Primaries(str, Enum):
     all = "all"
 
 
+class _PrimaryOrigin(str, Enum):
+    centre = "centre"
+    ring = "ring"
+
+
+class _PrimaryColor(str, Enum):
+    input = "input"
+    output = "output"
+
+
 def _save_or_show(fig, output: Optional[Path], show: bool, dpi: int) -> None:
     """Save figure to file and/or show it interactively."""
     import matplotlib.pyplot as plt
@@ -103,6 +113,17 @@ def rings(
             help="Show gamut rings as intersection of DUT and reference (requires --reference).",
         ),
     ] = False,
+    # ── Ring levels ──────────────────────────────────────────────────────────
+    l_rings: Annotated[
+        Optional[str],
+        typer.Option(
+            "--l-rings",
+            help=(
+                "Comma-separated L* values for inner rings "
+                "(default '10,20,30,40,50,60,70,80,90')."
+            ),
+        ),
+    ] = None,
     # ── Colour bands ─────────────────────────────────────────────────────────
     show_bands: Annotated[
         bool,
@@ -130,6 +151,37 @@ def rings(
             help="Primary-colour arrows: 'none', 'rgb' (default), or 'all' (R,G,B,C,M,Y).",
         ),
     ] = _Primaries.rgb,
+    ref_primaries: Annotated[
+        _Primaries,
+        typer.Option(
+            "--ref-primaries",
+            help="Reference primary-colour arrows: 'none' (default), 'rgb', or 'all'.",
+        ),
+    ] = _Primaries.none,
+    primary_color: Annotated[
+        _PrimaryColor,
+        typer.Option(
+            "--primary-color",
+            help=(
+                "Primary arrow head colour: 'output' (default, uses measured Lab→sRGB) "
+                "or 'input' (nominal R/G/B colour)."
+            ),
+        ),
+    ] = _PrimaryColor.output,
+    primary_origin: Annotated[
+        _PrimaryOrigin,
+        typer.Option(
+            "--primary-origin",
+            help="Where primary arrows start: 'centre' (default) or 'ring' (outer ring boundary).",
+        ),
+    ] = _PrimaryOrigin.centre,
+    show_cent_mark: Annotated[
+        bool,
+        typer.Option(
+            "--cent-mark/--no-cent-mark",
+            help="Show/hide the centre cross marker (default: show).",
+        ),
+    ] = True,
     # ── Constant-chroma reference circles ────────────────────────────────────
     chroma_rings: Annotated[
         Optional[str],
@@ -197,6 +249,10 @@ def rings(
         matplotlib.use("Agg")
 
     # ── Parse comma-separated options ────────────────────────────────────────
+    parsed_l_rings: list[float] | None = (
+        _parse_float_list(l_rings, "--l-rings") if l_rings is not None else None
+    )
+
     parsed_band_ls: float | tuple | list | None = None
     if band_ls is not None:
         vals = _parse_float_list(band_ls, "--band-ls")
@@ -230,10 +286,16 @@ def rings(
         intersection_plot=intersection,
         show_bands=show_bands,
         primaries=primaries.value,
+        ref_primaries=ref_primaries.value,
+        primary_color=primary_color.value,
+        primary_origin=primary_origin.value,
+        cent_mark="+k" if show_cent_mark else None,
         chroma_rings=parsed_chroma_rings,
         figsize=parsed_figsize,
         title=resolved_title,
     )
+    if parsed_l_rings is not None:
+        kwargs["l_rings"] = parsed_l_rings
     if band_chroma is not None:
         kwargs["band_chroma"] = band_chroma
     if parsed_band_ls is not None:

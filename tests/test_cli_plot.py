@@ -237,6 +237,47 @@ class TestPlotRingsNewOptions:
         )
         assert result.exit_code == 0, result.output
 
+    def test_l_rings(self, tmp_path):
+        out = tmp_path / "rings.png"
+        result = runner.invoke(
+            app, ["plot", "rings", "srgb", "--l-rings=20,40,60,80", "--output", str(out)]
+        )
+        assert result.exit_code == 0, result.output
+
+    def test_ref_primaries(self, tmp_path):
+        out = tmp_path / "rings.png"
+        result = runner.invoke(
+            app,
+            [
+                "plot", "rings", "srgb",
+                "--reference", "bt.2020",
+                "--ref-primaries", "rgb",
+                "--output", str(out),
+            ],
+        )
+        assert result.exit_code == 0, result.output
+
+    def test_primary_color_input(self, tmp_path):
+        out = tmp_path / "rings.png"
+        result = runner.invoke(
+            app, ["plot", "rings", "srgb", "--primary-color", "input", "--output", str(out)]
+        )
+        assert result.exit_code == 0, result.output
+
+    def test_primary_origin_ring(self, tmp_path):
+        out = tmp_path / "rings.png"
+        result = runner.invoke(
+            app, ["plot", "rings", "srgb", "--primary-origin", "ring", "--output", str(out)]
+        )
+        assert result.exit_code == 0, result.output
+
+    def test_no_cent_mark(self, tmp_path):
+        out = tmp_path / "rings.png"
+        result = runner.invoke(
+            app, ["plot", "rings", "srgb", "--no-cent-mark", "--output", str(out)]
+        )
+        assert result.exit_code == 0, result.output
+
 
 # ---------------------------------------------------------------------------
 # surface — save to file
