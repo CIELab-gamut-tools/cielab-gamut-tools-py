@@ -342,3 +342,50 @@ class TestPlotSurfaceSave:
     def test_surface_no_gamuts_fails(self):
         result = runner.invoke(app, ["plot", "surface", "--output", "out.png"])
         assert result.exit_code != 0
+
+    def test_surface_title(self, tmp_path):
+        out = tmp_path / "surface.png"
+        result = runner.invoke(
+            app, ["plot", "surface", "srgb", "--title", "My gamut", "--output", str(out)]
+        )
+        assert result.exit_code == 0, result.output
+
+    def test_surface_figsize(self, tmp_path):
+        out = tmp_path / "surface.png"
+        result = runner.invoke(
+            app, ["plot", "surface", "srgb", "--figsize=12,10", "--output", str(out)]
+        )
+        assert result.exit_code == 0, result.output
+
+    def test_surface_axis_limits(self, tmp_path):
+        out = tmp_path / "surface.png"
+        result = runner.invoke(
+            app,
+            [
+                "plot", "surface", "srgb",
+                "--xlim=-100,100", "--ylim=-100,100", "--zlim=0,100",
+                "--output", str(out),
+            ],
+        )
+        assert result.exit_code == 0, result.output
+
+    def test_surface_view_angle(self, tmp_path):
+        out = tmp_path / "surface.png"
+        result = runner.invoke(
+            app,
+            ["plot", "surface", "srgb", "--elev", "45", "--azim", "30", "--output", str(out)],
+        )
+        assert result.exit_code == 0, result.output
+
+    def test_surface_multi_gamut_with_options(self, tmp_path):
+        out = tmp_path / "surface.png"
+        result = runner.invoke(
+            app,
+            [
+                "plot", "surface", "srgb", "bt.2020",
+                "--alpha", "0.5", "--title", "Comparison",
+                "--elev", "20", "--azim", "-45",
+                "--output", str(out),
+            ],
+        )
+        assert result.exit_code == 0, result.output

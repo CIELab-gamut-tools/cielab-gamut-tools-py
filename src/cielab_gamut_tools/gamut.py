@@ -415,6 +415,7 @@ class Gamut:
         self,
         ax: Axes | None = None,
         alpha: float = 0.8,
+        **kwargs,
     ) -> tuple[Figure, Axes]:
         """
         Create a 3D surface plot of the gamut.
@@ -422,13 +423,16 @@ class Gamut:
         Args:
             ax: Optional matplotlib 3D axes to plot on.
             alpha: Surface transparency (0-1).
+            **kwargs: Forwarded to ``plot_surface()`` — see that function for
+                the full list (``figsize``, ``title``, ``xlim``, ``ylim``,
+                ``zlim``, ``elev``, ``azim``).
 
         Returns:
             A ``(Figure, Axes)`` tuple for the plot.
         """
         from cielab_gamut_tools.plotting.surface import plot_surface
 
-        return plot_surface(self, ax=ax, alpha=alpha)
+        return plot_surface(self, ax=ax, alpha=alpha, **kwargs)
 
     def plot_rings(
         self,

@@ -20,6 +20,13 @@ def plot_surface(
     ax: "Axes | None" = None,
     alpha: float = 0.8,
     show_axes: bool = True,
+    figsize: tuple[float, float] = (10.0, 8.0),
+    title: str | None = None,
+    xlim: tuple[float, float] = (-128.0, 128.0),
+    ylim: tuple[float, float] = (-128.0, 128.0),
+    zlim: tuple[float, float] = (0.0, 100.0),
+    elev: float | None = None,
+    azim: float | None = None,
 ) -> "tuple[Figure, Axes]":
     """
     Create a 3D surface plot of the gamut in CIELab space.
@@ -28,9 +35,19 @@ def plot_surface(
 
     Args:
         gamut: The gamut to plot.
-        ax: Optional matplotlib 3D axes. If None, a new figure is created.
+        ax: Optional matplotlib 3D axes. If ``None``, a new figure is created.
         alpha: Surface transparency (0=transparent, 1=opaque).
         show_axes: Whether to show axis labels and grid.
+        figsize: Figure size in inches as ``(width, height)`` (default
+            ``(10, 8)``). Ignored when ``ax`` is supplied.
+        title: Axes title. ``None`` (default) produces no title.
+        xlim: a* axis limits (default ``(-128, 128)``).
+        ylim: b* axis limits (default ``(-128, 128)``).
+        zlim: L* axis limits (default ``(0, 100)``).
+        elev: 3D view elevation angle in degrees. ``None`` uses matplotlib
+            default (~30°).
+        azim: 3D view azimuth angle in degrees. ``None`` uses matplotlib
+            default (~-60°).
 
     Returns:
         A ``(Figure, Axes)`` tuple for the plot.
@@ -43,7 +60,7 @@ def plot_surface(
 
     # Create figure if needed
     if ax is None:
-        fig = plt.figure(figsize=(10, 8))
+        fig = plt.figure(figsize=figsize)
         ax = fig.add_subplot(111, projection="3d")
     else:
         fig = ax.get_figure()
@@ -88,9 +105,14 @@ def plot_surface(
         ax.set_ylabel("b*")
         ax.set_zlabel("L*")
 
-    # Set axis limits
-    ax.set_xlim(-128, 128)
-    ax.set_ylim(-128, 128)
-    ax.set_zlim(0, 100)
+    ax.set_xlim(*xlim)
+    ax.set_ylim(*ylim)
+    ax.set_zlim(*zlim)
+
+    if title is not None:
+        ax.set_title(title)
+
+    if elev is not None or azim is not None:
+        ax.view_init(elev=elev, azim=azim)
 
     return fig, ax

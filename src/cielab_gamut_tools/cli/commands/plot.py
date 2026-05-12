@@ -332,6 +332,42 @@ def surface(
             )
         ),
     ],
+    alpha: Annotated[
+        float,
+        typer.Option("--alpha", help="Surface transparency per gamut (0=transparent, 1=opaque)."),
+    ] = 0.8,
+    # ── Plot decoration ───────────────────────────────────────────────────────
+    title: Annotated[
+        Optional[str],
+        typer.Option("--title", help="Set the plot title."),
+    ] = None,
+    # ── Figure geometry ───────────────────────────────────────────────────────
+    figsize: Annotated[
+        Optional[str],
+        typer.Option("--figsize", help="Figure size as 'W,H' in inches (default '10,8')."),
+    ] = None,
+    xlim: Annotated[
+        Optional[str],
+        typer.Option("--xlim", help="Override a* axis limits as 'MIN,MAX' (default '-128,128')."),
+    ] = None,
+    ylim: Annotated[
+        Optional[str],
+        typer.Option("--ylim", help="Override b* axis limits as 'MIN,MAX' (default '-128,128')."),
+    ] = None,
+    zlim: Annotated[
+        Optional[str],
+        typer.Option("--zlim", help="Override L* axis limits as 'MIN,MAX' (default '0,100')."),
+    ] = None,
+    # ── 3D view angle ─────────────────────────────────────────────────────────
+    elev: Annotated[
+        Optional[float],
+        typer.Option("--elev", help="3D view elevation angle in degrees."),
+    ] = None,
+    azim: Annotated[
+        Optional[float],
+        typer.Option("--azim", help="3D view azimuth angle in degrees."),
+    ] = None,
+    # ── Output ────────────────────────────────────────────────────────────────
     output: Annotated[
         Optional[Path],
         typer.Option("--output", "-o", help="Save plot to this file (png, pdf, svg, jpg, tiff)."),
@@ -344,10 +380,6 @@ def surface(
         int,
         typer.Option("--dpi", help="Resolution for raster output formats."),
     ] = 150,
-    alpha: Annotated[
-        float,
-        typer.Option("--alpha", help="Surface transparency per gamut (0=transparent, 1=opaque)."),
-    ] = 0.8,
 ) -> None:
     """Plot one or more 3D gamut surfaces in CIELab space.
 
@@ -365,15 +397,33 @@ def surface(
         import matplotlib
         matplotlib.use("Agg")
 
+    # ── Parse options ────────────────────────────────────────────────────────
+    parsed_figsize = _parse_float_pair(figsize, "--figsize") if figsize is not None else (10.0, 8.0)
+    parsed_xlim = _parse_float_pair(xlim, "--xlim") if xlim is not None else None
+    parsed_ylim = _parse_float_pair(ylim, "--ylim") if ylim is not None else None
+    parsed_zlim = _parse_float_pair(zlim, "--zlim") if zlim is not None else None
+
     import matplotlib.pyplot as plt
 
     from cielab_gamut_tools.plotting.surface import plot_surface
 
-    fig = plt.figure(figsize=(10, 8))
+    fig = plt.figure(figsize=parsed_figsize)
     ax = fig.add_subplot(111, projection="3d")
 
     for arg in gamuts:
-        gamut = resolve_gamut(arg)
-        plot_surface(gamut, ax=ax, alpha=alpha)
+        g = resolve_gamut(arg)
+        plot_surface(g, ax=ax, alpha=alpha)
+
+    # Apply overrides to the shared axes after all gamuts are drawn
+    if title is not None:
+        ax.set_title(title)
+    if parsed_xlim is not None:
+        ax.set_xlim(*parsed_xlim)
+    if parsed_ylim is not None:
+        ax.set_ylim(*parsed_ylim)
+    if parsed_zlim is not None:
+        ax.set_zlim(*parsed_zlim)
+    if elev is not None or azim is not None:
+        ax.view_init(elev=elev, azim=azim)
 
     _save_or_show(fig, output, show, dpi)

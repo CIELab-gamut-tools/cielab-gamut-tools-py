@@ -194,7 +194,7 @@ comma-separated single strings (consistent with `--reference`, `--primaries`,
 `--white`). For values that can be negative, document `--opt=VAL` form in help
 text to avoid Typer interpreting a leading `-` as a flag.
 
-### 18. `plot surface` CLI — parity with programmatic API
+### 18. `plot surface` CLI — parity with programmatic API ✅ DONE
 
 `plot_surface()` is already more limited programmatically, but the CLI only exposes
 `--alpha`. Add:
