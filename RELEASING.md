@@ -21,12 +21,12 @@ hatch version minor    # 0.1.0 → 0.2.0
 hatch version major    # 0.1.0 → 1.0.0
 ```
 
-This updates `pyproject.toml` automatically — nothing else to edit.
+This updates `src/cielab_gamut_tools/__init__.py` automatically — nothing else to edit.
 
 ### 2. Commit and tag
 
 ```cmd
-git add pyproject.toml
+git add src/cielab_gamut_tools/__init__.py
 git commit -m "bump version to 0.1.1"
 git tag v0.1.1
 git push && git push --tags
