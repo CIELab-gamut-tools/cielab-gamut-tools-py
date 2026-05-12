@@ -19,12 +19,6 @@ err_console = Console(stderr=True)
 _SUPPORTED_FORMATS = {".png", ".pdf", ".svg", ".jpg", ".jpeg", ".tiff"}
 
 
-class _RingReference(str, Enum):
-    none = "none"
-    ref = "ref"
-    intersection = "intersection"
-
-
 class _Primaries(str, Enum):
     none = "none"
     rgb = "rgb"
@@ -109,18 +103,6 @@ def rings(
             help="Show gamut rings as intersection of DUT and reference (requires --reference).",
         ),
     ] = False,
-    ring_reference: Annotated[
-        _RingReference,
-        typer.Option(
-            "--ring-reference",
-            help=(
-                "How the reference appears on inner rings: "
-                "'none' (outer ring only, default), "
-                "'ref' (all inner reference rings), "
-                "'intersection' (intersection rings)."
-            ),
-        ),
-    ] = _RingReference.none,
     # ── Colour bands ─────────────────────────────────────────────────────────
     show_bands: Annotated[
         bool,
@@ -209,10 +191,6 @@ def rings(
         err_console.print("[red]--intersection requires --reference.[/red]")
         raise typer.Exit(1)
 
-    if ring_reference != _RingReference.none and reference is None:
-        err_console.print("[red]--ring-reference requires --reference.[/red]")
-        raise typer.Exit(1)
-
     # Use Agg backend when only saving (avoids display dependency)
     if output is not None and not show:
         import matplotlib
@@ -250,7 +228,6 @@ def rings(
     # ── Build kwargs ─────────────────────────────────────────────────────────
     kwargs: dict = dict(
         intersection_plot=intersection,
-        ring_reference=ring_reference.value,
         show_bands=show_bands,
         primaries=primaries.value,
         chroma_rings=parsed_chroma_rings,

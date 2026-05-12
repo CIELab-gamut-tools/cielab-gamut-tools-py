@@ -164,8 +164,6 @@ options (all directly map to existing `plot_rings()` parameters):
 
 **Reference and comparison:**
 - `--reference2 <gamut>` — second reference outer-ring outline (`ref2_line` style)
-- `--ring-reference none|ref|intersection` — how the reference appears on inner
-  rings (default `none`)
 
 **Colour bands:**
 - `--no-bands` — suppress the colour-fill bands between rings

@@ -60,7 +60,6 @@ def plot_rings(
     ref_band_ls: float | tuple | list = (30.0, 98.0),
     ref_band_hue: float | Literal["match"] = "match",
     # Reference options
-    ring_reference: Literal["none", "ref", "intersection"] = "none",
     intersection_plot: bool = False,
     intersect_gamut: bool = False,
     intersection_line: str = "",
@@ -125,11 +124,6 @@ def plot_rings(
         ref_band_chroma: Chroma of reference band colours (default 0).
         ref_band_ls: Reference band lightness, same semantics as ``band_ls``.
         ref_band_hue: Reference band hue, same semantics as ``band_hue``.
-        ring_reference: How the reference gamut is shown on each inner ring.
-            ``"none"`` (default) — only the outer ring of the reference is
-            shown.  ``"ref"`` — all inner rings of the reference are shown
-            inside the test rings.  ``"intersection"`` — inner rings show
-            the intersection of test and reference.
         intersection_plot: If ``True`` (and a reference is provided), the
             reference gamut forms the outer boundary and the test gamut area
             is shown inside it. Forces ``intersect_gamut=True``.
@@ -255,19 +249,6 @@ def plot_rings(
             yi = np.append(test_y[i], test_y[i, 0])
             ax.plot(xi, yi, intersection_line, linewidth=1.0)
 
-    # ── Per-ring reference overlay (ring_reference) ───────────────────────
-    if ring_reference != "none" and _ref is not None and not intersection_plot:
-        if ring_reference == "ref":
-            sub_x, sub_y, _ = _calc_sub_rings(rings, _ref)
-        else:  # "intersection"
-            from cielab_gamut_tools.geometry.volume import intersect_gamuts
-            isect = intersect_gamuts(test_gamut, _ref)
-            sub_x, sub_y, _ = _calc_sub_rings(rings, isect)
-        for i in range(sub_x.shape[0]):
-            xi = np.append(sub_x[i], sub_x[i, 0])
-            yi = np.append(sub_y[i], sub_y[i, 0])
-            ax.plot(xi, yi, ref_line, linewidth=1.0)
-
     # ── L* ring labels ────────────────────────────────────────────────────
     all_l = list(l_rings) + [100]
     n_all = len(all_l)
@@ -297,7 +278,7 @@ def plot_rings(
         ax.plot(xi, yi, ref_line, linewidth=1.5)
 
     # ── Second reference outer ring ───────────────────────────────────────
-    if _ref2 is not None and ring_reference == "none" and ref2_line:
+    if _ref2 is not None and ref2_line:
         ref2_outer = _calc_gamut_rings(_ref2, [])
         xi = np.append(ref2_outer.x[-1], ref2_outer.x[-1, 0])
         yi = np.append(ref2_outer.y[-1], ref2_outer.y[-1, 0])

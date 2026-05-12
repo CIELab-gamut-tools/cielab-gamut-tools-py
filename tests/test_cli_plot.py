@@ -52,12 +52,6 @@ class TestPlotErrorCases:
         result = runner.invoke(app, ["plot", "rings", "srgb", "--intersection", "--show"])
         assert result.exit_code != 0
 
-    def test_rings_ring_reference_without_reference_fails(self):
-        result = runner.invoke(
-            app, ["plot", "rings", "srgb", "--ring-reference", "ref", "--show"]
-        )
-        assert result.exit_code != 0
-
     def test_rings_unsupported_format_fails(self, tmp_path):
         out = tmp_path / "plot.bmp"
         result = runner.invoke(app, ["plot", "rings", "srgb", "--output", str(out)])
@@ -198,32 +192,6 @@ class TestPlotRingsNewOptions:
         result = runner.invoke(
             app,
             ["plot", "rings", "srgb", "--reference2", "bt.2020", "--output", str(out)],
-        )
-        assert result.exit_code == 0, result.output
-
-    def test_ring_reference_ref(self, tmp_path):
-        out = tmp_path / "rings.png"
-        result = runner.invoke(
-            app,
-            [
-                "plot", "rings", "srgb",
-                "--reference", "bt.2020",
-                "--ring-reference", "ref",
-                "--output", str(out),
-            ],
-        )
-        assert result.exit_code == 0, result.output
-
-    def test_ring_reference_intersection(self, tmp_path):
-        out = tmp_path / "rings.png"
-        result = runner.invoke(
-            app,
-            [
-                "plot", "rings", "srgb",
-                "--reference", "bt.2020",
-                "--ring-reference", "intersection",
-                "--output", str(out),
-            ],
         )
         assert result.exit_code == 0, result.output
 
