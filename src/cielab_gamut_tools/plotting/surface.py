@@ -19,6 +19,7 @@ def plot_surface(
     gamut: "Gamut",
     ax: "Axes | None" = None,
     alpha: float = 0.8,
+    wireframe: bool = False,
     show_axes: bool = True,
     figsize: tuple[float, float] = (10.0, 8.0),
     title: str | None = None,
@@ -36,7 +37,9 @@ def plot_surface(
     Args:
         gamut: The gamut to plot.
         ax: Optional matplotlib 3D axes. If ``None``, a new figure is created.
-        alpha: Surface transparency (0=transparent, 1=opaque).
+        alpha: Surface transparency (0=transparent, 1=opaque). Ignored when
+            ``wireframe=True``.
+        wireframe: If ``True``, render edges only (no filled faces).
         show_axes: Whether to show axis labels and grid.
         figsize: Figure size in inches as ``(width, height)`` (default
             ``(10, 8)``). Ignored when ``ax`` is supplied.
@@ -94,9 +97,14 @@ def plot_surface(
         tri_color = np.mean(rgb[tri], axis=0)
         colors.append(tri_color)
 
-    poly = Poly3DCollection(verts, alpha=alpha)
-    poly.set_facecolor(colors)
-    poly.set_edgecolor("none")
+    poly = Poly3DCollection(verts)
+    if wireframe:
+        poly.set_facecolor([(0.0, 0.0, 0.0, 0.0)] * len(verts))
+        poly.set_edgecolor(colors)
+    else:
+        poly.set_facecolor(colors)
+        poly.set_edgecolor("none")
+        poly.set_alpha(alpha)
     ax.add_collection3d(poly)
 
     # Set axis properties

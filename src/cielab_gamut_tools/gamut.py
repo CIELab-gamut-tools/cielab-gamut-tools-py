@@ -415,6 +415,7 @@ class Gamut:
         self,
         ax: Axes | None = None,
         alpha: float = 0.8,
+        wireframe: bool = False,
         **kwargs,
     ) -> tuple[Figure, Axes]:
         """
@@ -422,7 +423,8 @@ class Gamut:
 
         Args:
             ax: Optional matplotlib 3D axes to plot on.
-            alpha: Surface transparency (0-1).
+            alpha: Surface transparency (0-1). Ignored when ``wireframe=True``.
+            wireframe: If ``True``, render edges only (no filled faces).
             **kwargs: Forwarded to ``plot_surface()`` — see that function for
                 the full list (``figsize``, ``title``, ``xlim``, ``ylim``,
                 ``zlim``, ``elev``, ``azim``).
@@ -432,7 +434,7 @@ class Gamut:
         """
         from cielab_gamut_tools.plotting.surface import plot_surface
 
-        return plot_surface(self, ax=ax, alpha=alpha, **kwargs)
+        return plot_surface(self, ax=ax, alpha=alpha, wireframe=wireframe, **kwargs)
 
     def plot_rings(
         self,

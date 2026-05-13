@@ -389,3 +389,103 @@ class TestPlotSurfaceSave:
             ],
         )
         assert result.exit_code == 0, result.output
+
+
+# ---------------------------------------------------------------------------
+# surface — wireframe and per-gamut style
+# ---------------------------------------------------------------------------
+
+class TestPlotSurfaceWireframe:
+    def test_wireframe_all(self, tmp_path):
+        out = tmp_path / "surface.png"
+        result = runner.invoke(
+            app, ["plot", "surface", "srgb", "--wireframe", "--output", str(out)]
+        )
+        assert result.exit_code == 0, result.output
+        assert out.exists()
+
+    def test_wireframe_multi_gamut(self, tmp_path):
+        out = tmp_path / "surface.png"
+        result = runner.invoke(
+            app, ["plot", "surface", "srgb", "bt.2020", "--wireframe", "--output", str(out)]
+        )
+        assert result.exit_code == 0, result.output
+        assert out.exists()
+
+    def test_style_wireframe_single(self, tmp_path):
+        out = tmp_path / "surface.png"
+        result = runner.invoke(
+            app, ["plot", "surface", "srgb", "--style", "wireframe", "--output", str(out)]
+        )
+        assert result.exit_code == 0, result.output
+        assert out.exists()
+
+    def test_style_alpha_single(self, tmp_path):
+        out = tmp_path / "surface.png"
+        result = runner.invoke(
+            app, ["plot", "surface", "srgb", "--style", "alpha:0.5", "--output", str(out)]
+        )
+        assert result.exit_code == 0, result.output
+        assert out.exists()
+
+    def test_style_mixed_two_gamuts(self, tmp_path):
+        out = tmp_path / "surface.png"
+        result = runner.invoke(
+            app,
+            ["plot", "surface", "srgb", "bt.2020", "--style", "wireframe,alpha:0.5",
+             "--output", str(out)],
+        )
+        assert result.exit_code == 0, result.output
+        assert out.exists()
+
+    def test_style_with_empty_field(self, tmp_path):
+        out = tmp_path / "surface.png"
+        result = runner.invoke(
+            app,
+            ["plot", "surface", "srgb", "bt.2020", "dci-p3",
+             "--style", ",wireframe,alpha:0.6", "--output", str(out)],
+        )
+        assert result.exit_code == 0, result.output
+        assert out.exists()
+
+    def test_style_shorter_than_gamuts(self, tmp_path):
+        out = tmp_path / "surface.png"
+        result = runner.invoke(
+            app,
+            ["plot", "surface", "srgb", "bt.2020", "dci-p3",
+             "--style", "wireframe,", "--output", str(out)],
+        )
+        assert result.exit_code == 0, result.output
+        assert out.exists()
+
+    def test_style_and_wireframe_flag_fails(self, tmp_path):
+        out = tmp_path / "surface.png"
+        result = runner.invoke(
+            app,
+            ["plot", "surface", "srgb", "--wireframe", "--style", "wireframe",
+             "--output", str(out)],
+        )
+        assert result.exit_code != 0
+
+    def test_style_and_alpha_flag_fails(self, tmp_path):
+        out = tmp_path / "surface.png"
+        result = runner.invoke(
+            app,
+            ["plot", "surface", "srgb", "--alpha", "0.5", "--style", "wireframe",
+             "--output", str(out)],
+        )
+        assert result.exit_code != 0
+
+    def test_style_unknown_token_fails(self, tmp_path):
+        out = tmp_path / "surface.png"
+        result = runner.invoke(
+            app, ["plot", "surface", "srgb", "--style", "invalid", "--output", str(out)]
+        )
+        assert result.exit_code != 0
+
+    def test_style_bad_alpha_value_fails(self, tmp_path):
+        out = tmp_path / "surface.png"
+        result = runner.invoke(
+            app, ["plot", "surface", "srgb", "--style", "alpha:notanumber", "--output", str(out)]
+        )
+        assert result.exit_code != 0

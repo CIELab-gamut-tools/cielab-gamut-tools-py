@@ -68,6 +68,37 @@ def _parse_float_pair(value: str, flag: str) -> tuple[float, float]:
         raise typer.Exit(1)
 
 
+def _parse_style_list(
+    style_str: str,
+    n_gamuts: int,
+    default_wireframe: bool,
+    default_alpha: float,
+) -> list[tuple[bool, float]]:
+    """Parse --style into per-gamut (wireframe, alpha) pairs."""
+    parts = style_str.split(",")
+    result: list[tuple[bool, float]] = []
+    for i in range(n_gamuts):
+        raw = parts[i].strip() if i < len(parts) else ""
+        if not raw:
+            result.append((default_wireframe, default_alpha))
+        elif raw == "wireframe":
+            result.append((True, default_alpha))
+        elif raw.startswith("alpha:"):
+            try:
+                a = float(raw[6:])
+            except ValueError:
+                err_console.print(f"[red]--style: invalid alpha value in '{raw}'[/red]")
+                raise typer.Exit(1)
+            result.append((False, a))
+        else:
+            err_console.print(
+                f"[red]--style: unknown token '{raw}' "
+                f"(expected 'wireframe', 'alpha:FLOAT', or empty)[/red]"
+            )
+            raise typer.Exit(1)
+    return result
+
+
 def _parse_float_list(value: str, flag: str) -> list[float]:
     """Parse 'A,B,...' into a list of floats, exit with error on failure."""
     try:
@@ -333,9 +364,24 @@ def surface(
         ),
     ],
     alpha: Annotated[
-        float,
-        typer.Option("--alpha", help="Surface transparency per gamut (0=transparent, 1=opaque)."),
-    ] = 0.8,
+        Optional[float],
+        typer.Option("--alpha", help="Surface transparency for solid gamuts (0=transparent, 1=opaque). Default: 0.8."),
+    ] = None,
+    wireframe: Annotated[
+        bool,
+        typer.Option("--wireframe", help="Render all gamuts as wireframe (edges only, no fill)."),
+    ] = False,
+    style: Annotated[
+        Optional[str],
+        typer.Option(
+            "--style",
+            help=(
+                "Per-gamut rendering style: comma-separated list aligned with gamut arguments. "
+                "Each entry: 'wireframe', 'alpha:FLOAT', or empty to use global defaults. "
+                "Cannot be combined with --wireframe or --alpha."
+            ),
+        ),
+    ] = None,
     # ── Plot decoration ───────────────────────────────────────────────────────
     title: Annotated[
         Optional[str],
@@ -384,10 +430,15 @@ def surface(
     """Plot one or more 3D gamut surfaces in CIELab space.
 
     When multiple gamuts are given they are overlaid on the same axes.
-    Use --alpha < 1 to see through overlapping surfaces.
+    Use --alpha < 1 to see through overlapping solid surfaces, or --wireframe
+    to render all gamuts as edges only. For per-gamut control use --style.
     """
     if not gamuts:
         err_console.print("[red]Provide at least one gamut.[/red]")
+        raise typer.Exit(1)
+
+    if style is not None and (wireframe or alpha is not None):
+        err_console.print("[red]--style cannot be combined with --wireframe or --alpha.[/red]")
         raise typer.Exit(1)
 
     if output is None:
@@ -403,6 +454,13 @@ def surface(
     parsed_ylim = _parse_float_pair(ylim, "--ylim") if ylim is not None else None
     parsed_zlim = _parse_float_pair(zlim, "--zlim") if zlim is not None else None
 
+    global_alpha = alpha if alpha is not None else 0.8
+    per_gamut: list[tuple[bool, float]] = (
+        _parse_style_list(style, len(gamuts), wireframe, global_alpha)
+        if style is not None
+        else [(wireframe, global_alpha)] * len(gamuts)
+    )
+
     import matplotlib.pyplot as plt
 
     from cielab_gamut_tools.plotting.surface import plot_surface
@@ -410,9 +468,9 @@ def surface(
     fig = plt.figure(figsize=parsed_figsize)
     ax = fig.add_subplot(111, projection="3d")
 
-    for arg in gamuts:
+    for arg, (wf, al) in zip(gamuts, per_gamut):
         g = resolve_gamut(arg)
-        plot_surface(g, ax=ax, alpha=alpha)
+        plot_surface(g, ax=ax, wireframe=wf, alpha=al)
 
     # Apply overrides to the shared axes after all gamuts are drawn
     if title is not None:
