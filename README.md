@@ -121,23 +121,27 @@ cgt calculate compare srgb bt.2020 dci-p3 -m -f csv
 
 ### Visualise gamut diagrams
 
+| Rings diagram | 3D surface |
+|:---:|:---:|
+| ![Rings example](https://raw.githubusercontent.com/CIELab-gamut-tools/cielab-gamut-tools-py/main/docs/images/rings_example.png) | ![Surface example](https://raw.githubusercontent.com/CIELab-gamut-tools/cielab-gamut-tools-py/main/docs/images/surface_example.png) |
+| sRGB ∩ BT.2020 | sRGB solid + BT.2020 wireframe |
+
 ```bash
 # 2D ring diagram (a*-b* plane, L* encoded as ring radii)
 cgt plot rings display.txt
-cgt plot rings display.txt -r srgb
-cgt plot rings display.txt -r srgb -i
-
-# Save to file
-cgt plot rings display.txt -r srgb -o rings.png
-cgt plot rings display.txt -o rings.pdf --dpi 300
+cgt plot rings display.txt -r srgb          # with reference overlay
+cgt plot rings display.txt -r srgb -i       # intersection view
+cgt plot rings display.txt -r srgb -o rings.png --dpi 200
 
 # 3D surface in CIELab space
 cgt plot surface display.txt
-
-# Overlay multiple gamuts (use --alpha < 1 to see through surfaces)
-cgt plot surface srgb bt.2020 --alpha 0.4
-cgt plot surface display.txt srgb --alpha 0.5 -o comparison.png
+cgt plot surface srgb bt.2020 --alpha 0.4   # overlay, see-through
+cgt plot surface srgb bt.2020 --style ",wireframe+grey+lw:0.5"  # mixed solid/wireframe
+cgt plot surface display.txt srgb -o comparison.png
 ```
+
+Both commands have many more options — see the detailed references:
+[Rings diagram options](docs/cli-rings.md) · [Surface plot options](docs/cli-surface.md)
 
 ### Generate reference files
 

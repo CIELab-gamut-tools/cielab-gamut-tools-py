@@ -226,6 +226,27 @@ Known Gaps list.
 
 ---
 
+## CLI — Minor improvements
+
+### 19. Auto-create output directory for `--output`
+
+Currently `cgt plot rings … -o docs/images/foo.png` fails with a cryptic
+`FileNotFoundError` from matplotlib if the parent directory does not exist.
+
+Options:
+- **(preferred)** Auto-create with `output.parent.mkdir(parents=True, exist_ok=True)`
+  in `_save_or_show()` before calling `fig.savefig()`. Silent, matches the behaviour
+  of most CLI tools.
+- **(alternative)** Detect the missing directory early and print a clear error message
+  directing the user to create it first.
+
+The fix belongs in `_save_or_show()` in `src/cielab_gamut_tools/cli/commands/plot.py`.
+The same fix applies to both `rings` and `surface` since both call `_save_or_show()`.
+Note: `scripts/build_docs_images.py` already does `mkdir(parents=True, exist_ok=True)`
+and is unaffected — this item is about the CLI only.
+
+---
+
 ## Future Features (not yet scheduled)
 
 ### F1. Web UI
