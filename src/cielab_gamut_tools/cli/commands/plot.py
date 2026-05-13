@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from enum import Enum
 from pathlib import Path
 from typing import Annotated, Optional
@@ -68,35 +69,104 @@ def _parse_float_pair(value: str, flag: str) -> tuple[float, float]:
         raise typer.Exit(1)
 
 
-def _parse_style_list(
-    style_str: str,
-    n_gamuts: int,
-    default_wireframe: bool,
-    default_alpha: float,
-) -> list[tuple[bool, float]]:
-    """Parse --style into per-gamut (wireframe, alpha) pairs."""
-    parts = style_str.split(",")
-    result: list[tuple[bool, float]] = []
-    for i in range(n_gamuts):
-        raw = parts[i].strip() if i < len(parts) else ""
-        if not raw:
-            result.append((default_wireframe, default_alpha))
-        elif raw == "wireframe":
-            result.append((True, default_alpha))
-        elif raw.startswith("alpha:"):
-            try:
-                a = float(raw[6:])
-            except ValueError:
-                err_console.print(f"[red]--style: invalid alpha value in '{raw}'[/red]")
+def _parse_style_element(raw: str) -> dict:
+    """Parse one gamut's style string ('+'-delimited tokens) into plot_surface kwargs."""
+    if not raw.strip():
+        return {}
+
+    result: dict = {}
+    has_color = False
+    has_chroma_or_lightness = False
+
+    for token in raw.split("+"):
+        token = token.strip()
+        if not token:
+            continue
+
+        if token == "wireframe":
+            result["wireframe"] = True
+        elif token in ("grey", "gray"):
+            if has_color:
+                err_console.print(
+                    "[red]--style: 'grey'/'gray' cannot be combined with 'color'/'colour'[/red]"
+                )
                 raise typer.Exit(1)
-            result.append((False, a))
+            result["chroma"] = 0.0
+            result["lightness"] = 50.0
+            has_chroma_or_lightness = True
+        elif ":" in token:
+            key, _, val = token.partition(":")
+            key = key.strip()
+            val = val.strip()
+
+            if key in ("color", "colour"):
+                if has_chroma_or_lightness:
+                    err_console.print(
+                        "[red]--style: 'color'/'colour' cannot be combined with "
+                        "'chroma', 'lightness', 'grey', or 'gray'[/red]"
+                    )
+                    raise typer.Exit(1)
+                # Accept bare 6-digit hex without '#'
+                if re.match(r"^[0-9a-fA-F]{6}$", val):
+                    val = "#" + val
+                result["color"] = val
+                has_color = True
+            elif key == "chroma":
+                if has_color:
+                    err_console.print(
+                        "[red]--style: 'chroma' cannot be combined with 'color'/'colour'[/red]"
+                    )
+                    raise typer.Exit(1)
+                try:
+                    result["chroma"] = float(val)
+                except ValueError:
+                    err_console.print(f"[red]--style: invalid chroma value '{val}'[/red]")
+                    raise typer.Exit(1)
+                has_chroma_or_lightness = True
+            elif key == "lightness":
+                if has_color:
+                    err_console.print(
+                        "[red]--style: 'lightness' cannot be combined with 'color'/'colour'[/red]"
+                    )
+                    raise typer.Exit(1)
+                try:
+                    result["lightness"] = float(val)
+                except ValueError:
+                    err_console.print(f"[red]--style: invalid lightness value '{val}'[/red]")
+                    raise typer.Exit(1)
+                has_chroma_or_lightness = True
+            elif key == "lw":
+                try:
+                    result["linewidth"] = float(val)
+                except ValueError:
+                    err_console.print(f"[red]--style: invalid lw value '{val}'[/red]")
+                    raise typer.Exit(1)
+            elif key == "alpha":
+                try:
+                    result["alpha"] = float(val)
+                except ValueError:
+                    err_console.print(f"[red]--style: invalid alpha value '{val}'[/red]")
+                    raise typer.Exit(1)
+            else:
+                err_console.print(f"[red]--style: unknown property '{key}'[/red]")
+                raise typer.Exit(1)
         else:
             err_console.print(
-                f"[red]--style: unknown token '{raw}' "
-                f"(expected 'wireframe', 'alpha:FLOAT', or empty)[/red]"
+                f"[red]--style: unknown token '{token}' "
+                f"(expected 'wireframe', 'grey', 'gray', or 'property:value')[/red]"
             )
             raise typer.Exit(1)
+
     return result
+
+
+def _parse_style_list(style_str: str, n_gamuts: int) -> list[dict]:
+    """Split --style by comma and parse each element into plot_surface kwargs."""
+    parts = style_str.split(",")
+    return [
+        _parse_style_element(parts[i] if i < len(parts) else "")
+        for i in range(n_gamuts)
+    ]
 
 
 def _parse_float_list(value: str, flag: str) -> list[float]:
@@ -455,10 +525,10 @@ def surface(
     parsed_zlim = _parse_float_pair(zlim, "--zlim") if zlim is not None else None
 
     global_alpha = alpha if alpha is not None else 0.8
-    per_gamut: list[tuple[bool, float]] = (
-        _parse_style_list(style, len(gamuts), wireframe, global_alpha)
+    per_gamut_styles: list[dict] = (
+        _parse_style_list(style, len(gamuts))
         if style is not None
-        else [(wireframe, global_alpha)] * len(gamuts)
+        else [{"wireframe": wireframe, "alpha": global_alpha}] * len(gamuts)
     )
 
     import matplotlib.pyplot as plt
@@ -468,9 +538,9 @@ def surface(
     fig = plt.figure(figsize=parsed_figsize)
     ax = fig.add_subplot(111, projection="3d")
 
-    for arg, (wf, al) in zip(gamuts, per_gamut):
+    for arg, style_kwargs in zip(gamuts, per_gamut_styles):
         g = resolve_gamut(arg)
-        plot_surface(g, ax=ax, wireframe=wf, alpha=al)
+        plot_surface(g, ax=ax, **style_kwargs)
 
     # Apply overrides to the shared axes after all gamuts are drawn
     if title is not None:

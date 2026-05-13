@@ -458,6 +458,109 @@ class TestPlotSurfaceWireframe:
         assert result.exit_code == 0, result.output
         assert out.exists()
 
+    def test_wireframe_grey_shorthand(self, tmp_path):
+        out = tmp_path / "surface.png"
+        result = runner.invoke(
+            app, ["plot", "surface", "srgb", "--style", "wireframe+grey", "--output", str(out)]
+        )
+        assert result.exit_code == 0, result.output
+        assert out.exists()
+
+    def test_wireframe_gray_shorthand(self, tmp_path):
+        out = tmp_path / "surface.png"
+        result = runner.invoke(
+            app, ["plot", "surface", "srgb", "--style", "wireframe+gray", "--output", str(out)]
+        )
+        assert result.exit_code == 0, result.output
+
+    def test_wireframe_colour_british(self, tmp_path):
+        out = tmp_path / "surface.png"
+        result = runner.invoke(
+            app, ["plot", "surface", "srgb", "--style", "wireframe+colour:#808080", "--output", str(out)]
+        )
+        assert result.exit_code == 0, result.output
+
+    def test_wireframe_color_no_hash(self, tmp_path):
+        out = tmp_path / "surface.png"
+        result = runner.invoke(
+            app, ["plot", "surface", "srgb", "--style", "wireframe+color:808080", "--output", str(out)]
+        )
+        assert result.exit_code == 0, result.output
+
+    def test_wireframe_lw(self, tmp_path):
+        out = tmp_path / "surface.png"
+        result = runner.invoke(
+            app, ["plot", "surface", "srgb", "--style", "wireframe+lw:2.0", "--output", str(out)]
+        )
+        assert result.exit_code == 0, result.output
+
+    def test_wireframe_alpha(self, tmp_path):
+        out = tmp_path / "surface.png"
+        result = runner.invoke(
+            app, ["plot", "surface", "srgb", "--style", "wireframe+alpha:0.5", "--output", str(out)]
+        )
+        assert result.exit_code == 0, result.output
+
+    def test_wireframe_chroma(self, tmp_path):
+        out = tmp_path / "surface.png"
+        result = runner.invoke(
+            app, ["plot", "surface", "srgb", "--style", "wireframe+chroma:0.3", "--output", str(out)]
+        )
+        assert result.exit_code == 0, result.output
+
+    def test_wireframe_lightness(self, tmp_path):
+        out = tmp_path / "surface.png"
+        result = runner.invoke(
+            app, ["plot", "surface", "srgb", "--style", "wireframe+lightness:60", "--output", str(out)]
+        )
+        assert result.exit_code == 0, result.output
+
+    def test_wireframe_chroma_and_lightness(self, tmp_path):
+        out = tmp_path / "surface.png"
+        result = runner.invoke(
+            app,
+            ["plot", "surface", "srgb", "--style", "wireframe+chroma:0.3+lightness:60",
+             "--output", str(out)],
+        )
+        assert result.exit_code == 0, result.output
+
+    def test_solid_and_wireframe_mixed(self, tmp_path):
+        out = tmp_path / "surface.png"
+        result = runner.invoke(
+            app,
+            ["plot", "surface", "srgb", "bt.2020",
+             "--style", "alpha:1.0,wireframe+grey+lw:1.5",
+             "--output", str(out)],
+        )
+        assert result.exit_code == 0, result.output
+
+    def test_style_color_and_chroma_fails(self, tmp_path):
+        out = tmp_path / "surface.png"
+        result = runner.invoke(
+            app,
+            ["plot", "surface", "srgb", "--style", "wireframe+color:#808080+chroma:0.3",
+             "--output", str(out)],
+        )
+        assert result.exit_code != 0
+
+    def test_style_color_and_lightness_fails(self, tmp_path):
+        out = tmp_path / "surface.png"
+        result = runner.invoke(
+            app,
+            ["plot", "surface", "srgb", "--style", "wireframe+colour:#808080+lightness:50",
+             "--output", str(out)],
+        )
+        assert result.exit_code != 0
+
+    def test_style_grey_and_color_fails(self, tmp_path):
+        out = tmp_path / "surface.png"
+        result = runner.invoke(
+            app,
+            ["plot", "surface", "srgb", "--style", "wireframe+grey+color:#808080",
+             "--output", str(out)],
+        )
+        assert result.exit_code != 0
+
     def test_style_and_wireframe_flag_fails(self, tmp_path):
         out = tmp_path / "surface.png"
         result = runner.invoke(
