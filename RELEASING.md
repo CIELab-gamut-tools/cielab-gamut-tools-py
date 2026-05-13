@@ -8,8 +8,19 @@ pip install hatch
 ```
 
 Create a PyPI API token at [pypi.org](https://pypi.org) → Account Settings → API tokens,
-scoped to the `cielab-gamut-tools` project. `hatch publish` will prompt for it on first
-use and cache it.
+scoped to the `cielab-gamut-tools` project.
+
+Store it in `%USERPROFILE%\.pypirc` so `hatch publish` never prompts:
+
+```ini
+[distutils]
+index-servers =
+    pypi
+
+[pypi]
+username = __token__
+password = pypi-YOUR-TOKEN-HERE
+```
 
 ## Release process
 
