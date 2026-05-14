@@ -92,3 +92,6 @@ standards
 
 # Temporary command output
 tmp/
+
+# MkDocs build output
+site/
