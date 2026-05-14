@@ -178,27 +178,31 @@ def use_agg_backend():
 class TestPlotSmoke:
 
     def test_plot_surface_returns_figure(self):
+        import matplotlib.axes
         import matplotlib.figure
         from cielab_gamut_tools import SyntheticGamut
-        fig = SyntheticGamut.srgb().plot_surface()
+        fig, ax = SyntheticGamut.srgb().plot_surface()
         assert isinstance(fig, matplotlib.figure.Figure)
+        assert isinstance(ax, matplotlib.axes.Axes)
 
     def test_plot_rings_returns_figure(self):
+        import matplotlib.axes
         import matplotlib.figure
         from cielab_gamut_tools import SyntheticGamut
-        fig = SyntheticGamut.srgb().plot_rings()
+        fig, ax = SyntheticGamut.srgb().plot_rings()
         assert isinstance(fig, matplotlib.figure.Figure)
+        assert isinstance(ax, matplotlib.axes.Axes)
 
     def test_plot_rings_with_reference(self):
         import matplotlib.figure
         from cielab_gamut_tools import SyntheticGamut
-        fig = SyntheticGamut.srgb().plot_rings(reference=SyntheticGamut.bt2020())
+        fig, _ax = SyntheticGamut.srgb().plot_rings(reference=SyntheticGamut.bt2020())
         assert isinstance(fig, matplotlib.figure.Figure)
 
     def test_plot_rings_intersection_mode(self):
         import matplotlib.figure
         from cielab_gamut_tools import SyntheticGamut
-        fig = SyntheticGamut.srgb().plot_rings(
+        fig, _ax = SyntheticGamut.srgb().plot_rings(
             reference=SyntheticGamut.bt2020(),
             intersection_plot=True,
         )
@@ -207,17 +211,17 @@ class TestPlotSmoke:
     def test_plot_rings_adobe_rgb(self):
         import matplotlib.figure
         from cielab_gamut_tools import SyntheticGamut
-        fig = SyntheticGamut.adobe_rgb().plot_rings(reference=SyntheticGamut.srgb())
+        fig, _ax = SyntheticGamut.adobe_rgb().plot_rings(reference=SyntheticGamut.srgb())
         assert isinstance(fig, matplotlib.figure.Figure)
 
     def test_plot_surface_closes_cleanly(self):
         import matplotlib.pyplot as plt
         from cielab_gamut_tools import SyntheticGamut
-        fig = SyntheticGamut.srgb().plot_surface()
+        fig, _ax = SyntheticGamut.srgb().plot_surface()
         plt.close(fig)
 
     def test_plot_rings_closes_cleanly(self):
         import matplotlib.pyplot as plt
         from cielab_gamut_tools import SyntheticGamut
-        fig = SyntheticGamut.srgb().plot_rings()
+        fig, _ax = SyntheticGamut.srgb().plot_rings()
         plt.close(fig)

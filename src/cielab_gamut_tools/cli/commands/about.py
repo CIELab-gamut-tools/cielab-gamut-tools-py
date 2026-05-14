@@ -1,6 +1,32 @@
+import json
+from urllib.error import URLError
+from urllib.request import urlopen
+
 from rich.console import Console
 
 from cielab_gamut_tools import __version__
+
+
+def _check_for_update() -> str | None:
+    """Return the latest PyPI version string if newer than installed, else None."""
+    try:
+        with urlopen(
+            "https://pypi.org/pypi/cielab-gamut-tools/json", timeout=3
+        ) as resp:
+            latest = json.loads(resp.read())["info"]["version"]
+    except (URLError, KeyError, ValueError, OSError):
+        return None
+
+    def _parse(v: str) -> tuple[int, ...]:
+        try:
+            return tuple(int(x) for x in v.split("."))
+        except ValueError:
+            return (0,)
+
+    if _parse(latest) > _parse(__version__):
+        return latest
+    return None
+
 
 _STANDARDS = [
     (
@@ -59,3 +85,12 @@ def about_command() -> None:
         "[bold]Documentation:[/bold] https://cielab-gamut-tools.readthedocs.io"
     )
     console.print("[bold]Licence:[/bold]       MIT\n")
+
+    latest = _check_for_update()
+    if latest:
+        console.print(
+            f"[yellow]A new version is available: {latest} "
+            f"(you have {__version__})[/yellow]"
+        )
+        console.print("  [dim]pipx upgrade cielab-gamut-tools[/dim]")
+        console.print("  [dim]pip install --upgrade cielab-gamut-tools[/dim]\n")

@@ -111,9 +111,8 @@ error message when neither matches.
   gamut j covered by row gamut i. `--reference` and `--matrix` are mutually
   exclusive. All three modes support `--format text/json/csv`.
 
-### 10. `plot rings` and `plot surface`
-Wrap existing plotting functions. Add `--mode intersection` for ring diagram (uses
-`compute_rings()` from item 3). Support all style presets and output formats.
+### 10. `plot rings` and `plot surface` ✅ DONE
+Basic CLI wrappers implemented. See items 16–18 below for parity work.
 
 ### 11. `generate rgb-signals` ✅ DONE
 **Completed.** `cielab-tools generate rgb-signals` wraps `make_rgb_signals()`.
@@ -139,6 +138,75 @@ generated gamuts are official references.
 **Completed** as part of items 7–9. All `calculate` subcommands produce clean,
 header-rowed CSV via `--format csv`, with consistent snake_case column naming.
 
+### 16. Return `(fig, ax)` from plotting functions — API consistency ✅ DONE
+
+`plot_rings()` and `plot_surface()` currently return only a `Figure`. API consumers
+who want to customise the plot after the call must use `fig.axes[0]`, which is
+fragile. Return `(Figure, Axes)` instead from both functions.
+
+Scope:
+- `plotting/rings.py` → `plot_rings()` return type `tuple[Figure, Axes]`
+- `plotting/surface.py` → `plot_surface()` return type `tuple[Figure, Axes]`
+- `gamut.py` → `Gamut.plot_rings()` and `Gamut.plot_surface()` delegate; update
+  their return type annotations accordingly
+- `cli/commands/plot.py` → CLI callers ignore the return value; no code change
+  needed, but verify nothing unpacks the result
+- `tests/` → update any tests that currently assign `fig = plot_rings(...)` and
+  then check `fig` — unpack to `fig, ax = ...` and add a basic `isinstance` check
+  on `ax`
+
+This is a 0.x release; the breaking change is acceptable.
+
+### 17. `plot rings` CLI — parity with programmatic API ✅ DONE
+
+The CLI currently exposes only `--reference` and `--intersection`. Add the following
+options (all directly map to existing `plot_rings()` parameters):
+
+**Reference and comparison:**
+- `--reference2 <gamut>` — second reference outer-ring outline (`ref2_line` style)
+
+**Colour bands:**
+- `--no-bands` — suppress the colour-fill bands between rings
+- `--band-chroma FLOAT` — chroma of band fill colours (default 50)
+- `--band-ls LO,HI` or single value — lightness range across bands (comma-separated)
+
+**Primary-colour indicators:**
+- `--primaries none|rgb|all` — show primary-colour arrows (default `rgb` when the
+  gamut has RGB data; `none` for named synthetic gamuts loaded without RGB)
+
+**Constant-chroma reference circles:**
+- `--chroma-rings R,R,...` — draw constant-chroma circles at these C* radii
+  (comma-separated floats, e.g. `--chroma-rings 50,100,150`)
+
+**Plot decoration:**
+- `--title TEXT` — override the auto-generated title
+- `--no-title` — suppress the title entirely
+
+**Post-plot geometry** (complement to matplotlib access via the returned `(fig, ax)`
+in the programmatic API; these set limits before `tight_layout()` is called):
+- `--xlim MIN,MAX` — override the auto-calculated a* axis limits
+  (use `=` form for negatives: `--xlim=-200,200`)
+- `--ylim MIN,MAX` — override the b* axis limits (same note)
+- `--figsize W,H` — figure width × height in inches (default `8,8`); comma-separated
+
+All multi-value CLI arguments follow the established project convention of
+comma-separated single strings (consistent with `--reference`, `--primaries`,
+`--white`). For values that can be negative, document `--opt=VAL` form in help
+text to avoid Typer interpreting a leading `-` as a flag.
+
+### 18. `plot surface` CLI — parity with programmatic API ✅ DONE
+
+`plot_surface()` is already more limited programmatically, but the CLI only exposes
+`--alpha`. Add:
+
+- `--title TEXT` / `--no-title` — override or suppress the axes title
+- `--figsize W,H` — figure size (default `10,8`)
+- `--xlim`, `--ylim`, `--zlim MIN,MAX` — override the auto-scaled axis limits
+- `--elev FLOAT` / `--azim FLOAT` — 3D viewing elevation and azimuth angles
+
+These require passing the options into `plot_surface()` or applying them after the
+call via the returned `Axes` (once item 16 is done).
+
 ---
 
 ## Documentation
@@ -155,6 +223,27 @@ Confirm final IEC TC110 publication numbers with standards committee before fina
 ### 15. Update `CLAUDE.md`
 Once items 1–5 above are implemented, update the Implementation Status section and
 Known Gaps list.
+
+---
+
+## CLI — Minor improvements
+
+### 19. Auto-create output directory for `--output`
+
+Currently `cgt plot rings … -o docs/images/foo.png` fails with a cryptic
+`FileNotFoundError` from matplotlib if the parent directory does not exist.
+
+Options:
+- **(preferred)** Auto-create with `output.parent.mkdir(parents=True, exist_ok=True)`
+  in `_save_or_show()` before calling `fig.savefig()`. Silent, matches the behaviour
+  of most CLI tools.
+- **(alternative)** Detect the missing directory early and print a clear error message
+  directing the user to create it first.
+
+The fix belongs in `_save_or_show()` in `src/cielab_gamut_tools/cli/commands/plot.py`.
+The same fix applies to both `rings` and `surface` since both call `_save_or_show()`.
+Note: `scripts/build_docs_images.py` already does `mkdir(parents=True, exist_ok=True)`
+and is unaffected — this item is about the CLI only.
 
 ---
 

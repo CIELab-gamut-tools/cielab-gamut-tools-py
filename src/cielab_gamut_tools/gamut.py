@@ -415,27 +415,49 @@ class Gamut:
         self,
         ax: Axes | None = None,
         alpha: float = 0.8,
-    ) -> Figure:
+        wireframe: bool = False,
+        color: str | None = None,
+        chroma: float | None = None,
+        lightness: float | None = None,
+        linewidth: float | None = None,
+        **kwargs,
+    ) -> tuple[Figure, Axes]:
         """
         Create a 3D surface plot of the gamut.
 
         Args:
             ax: Optional matplotlib 3D axes to plot on.
-            alpha: Surface transparency (0-1).
+            alpha: Face transparency for solid (0-1); edge opacity for
+                wireframe.
+            wireframe: If ``True``, render edges only (no filled faces).
+            color: Fixed edge colour for wireframe (matplotlib color string).
+                Mutually exclusive with ``chroma`` and ``lightness``.
+            chroma: Scale factor for a*, b* of per-face edge colours (0=grey,
+                1=full). Mutually exclusive with ``color``.
+            lightness: Override L* of per-face edge colours (0-100). Can be
+                combined with ``chroma``. Mutually exclusive with ``color``.
+            linewidth: Wireframe edge line width in points.
+            **kwargs: Forwarded to ``plot_surface()`` — see that function for
+                the full list (``figsize``, ``title``, ``xlim``, ``ylim``,
+                ``zlim``, ``elev``, ``azim``).
 
         Returns:
-            The matplotlib Figure containing the plot.
+            A ``(Figure, Axes)`` tuple for the plot.
         """
         from cielab_gamut_tools.plotting.surface import plot_surface
 
-        return plot_surface(self, ax=ax, alpha=alpha)
+        return plot_surface(
+            self, ax=ax, alpha=alpha, wireframe=wireframe,
+            color=color, chroma=chroma, lightness=lightness,
+            linewidth=linewidth, **kwargs,
+        )
 
     def plot_rings(
         self,
         reference: Gamut | SyntheticGamut | None = None,
         reference2: Gamut | SyntheticGamut | None = None,
         **kwargs,
-    ) -> Figure:
+    ) -> tuple[Figure, Axes]:
         """
         Create a 2D gamut rings plot in the a*-b* plane.
 
@@ -449,7 +471,7 @@ class Gamut:
                 ``plot_rings()`` — see that function for the full list.
 
         Returns:
-            The matplotlib Figure containing the plot.
+            A ``(Figure, Axes)`` tuple for the plot.
         """
         from cielab_gamut_tools.plotting.rings import plot_rings
 

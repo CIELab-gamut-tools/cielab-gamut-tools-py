@@ -1,4 +1,6 @@
-# CLAUDE.md - cielab-gamut-tools-py
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 Python implementation of gamut volume calculation for color displays. This is a port of the MATLAB library [cielab-gamut-tools-m](https://github.com/CIELab-gamut-tools/cielab-gamut-tools-m).
 
@@ -6,154 +8,138 @@ Python implementation of gamut volume calculation for color displays. This is a 
 
 **WORKFLOW:** Work directly in the main project folder (`cielab-gamut-tools-py/`), not in git worktrees. This is a single-developer project — worktrees add complexity without benefit.
 
-## Implementation Status
+## Development Commands
 
-### Working — All tests passing
-- **SyntheticGamut**: sRGB, BT.2020, DCI-P3, Display P3, custom gamuts
-- **Volume calculation**: Ray-triangle intersection algorithm matching MATLAB
-- **Colorspace**: XYZ↔Lab, Bradford chromatic adaptation, sRGB gamma
-- **Tesselation**: RGB cube surface with correct triangle winding
-- **CGATS I/O**: generalised reader (`CgatsData`) and writer supporting any
-  combination of RGB, XYZ, and LAB columns; auto-detects colorspace on read
-- **`_expand_colordata_to_tesselation()`**: expands the 602 unique CGATS points
-  back to the 726-vertex tessellation via exact integer-space RGB lookup (matching
-  MATLAB's `map_rows.m`); falls back to scipy scattered interpolation only for
-  non-standard measurement grids
-- **`Gamut.from_cgats()`**: handles both CGE_MEASUREMENT (RGB+XYZ) and
-  CGE_ENVELOPE (RGB+LAB) files; XYZ takes priority when both are present
-- **`Gamut.from_xyz()`**: full pipeline from measurements to Lab surface; extracts
-  the measured white point (RGB=max row) and scales D50 to the same luminance
-  (`D50_scaled = [0.9642, 1, 0.8249] × Y_white`) before Bradford CAT and Lab
-  conversion — matches `make_gamut_envelope.m` exactly, handles absolute-luminance
-  measurements (Y≈100 cd/m²) as well as normalised synthetic data (Y=1); retains
-  source-space XYZ surface values on `gamut.xyz` for export
-- **`Gamut.to_cgats()`**: writes CGE_ENVELOPE, CGE_MEASUREMENT, or combined file
-  (`mode="envelope"` / `"measurement"` / `"all"`)
-- **`SyntheticGamut.to_cgats()`**: delegates to `gamut.to_cgats()`; XYZ available
-  since `_build_gamut()` now stores source-space XYZ on the Gamut object
-- **`intersect_gamuts()`**: Gamut intersection via cylindrical map intersection
-- **Plotting**: `plot_surface()` and `plot_rings()` written and smoke-tested (Agg backend);
-  `plot_surface()` accepts an `ax` parameter so multiple gamuts can be overlaid on
-  one set of 3D axes
-- **`make_rgb_signals(m, bits)`**: normative RGB test signal set; m=5/7/9/11, arbitrary bit depth; exported from top-level package
-- **`SyntheticGamut.adobe_rgb()`**: Adobe RGB (1998) matching IEC 62906-6-1 Table B.1
-- **`Gamut.compute_rings()`** / **`SyntheticGamut.compute_rings()`**: returns `(l_steps, h_steps)` C\*_RSS array — normative ring metric in all three standards
+```bash
+# Setup
+python -m venv .venv
+source .venv/bin/activate   # or .venv\Scripts\activate on Windows
+pip install -e ".[dev]"
 
-### Verified Results
-- `SyntheticGamut.srgb().volume()` → 830,807 (MATLAB: 830,766, difference ~0.005%, within 1% tolerance)
-- All three computation paths (direct, from measurement CGATS, from envelope CGATS) give identical results ✓
-- BT.2020 volume confirmed larger than sRGB ✓
-- Intersection commutativity confirmed (A∩B == B∩A) ✓
-- Self-intersection confirmed (A∩A == A) ✓
-- Measured display files with absolute luminance (Y≈100 cd/m²) now normalised correctly against their own white point, matching MATLAB `make_gamut_envelope.m` output ✓
+# Test
+pytest                                             # all tests
+pytest tests/test_gamut.py                         # single file
+pytest tests/test_gamut.py::TestVolume             # single class
+pytest tests/test_gamut.py::TestVolume::test_srgb  # single test
+pytest --cov=cielab_gamut_tools                    # with coverage
 
-### Performance
-Full test suite runs in ~700 ms. Intersection tests run in ~50–100 ms each.
-Original unoptimised implementation took ~26 s for the same tests (~37× improvement).
+# Lint / format
+ruff check src tests
+ruff format src tests
+mypy src
+```
 
-Optimisations applied (in order):
-1. **Cylindrical map caching** — cached on the `Gamut` object; shared between `volume()` and `intersect()` calls
-2. **Vectorised hue loop** — all 360 ray directions batched into a single matrix multiply per L* slice (`e2e1_2d @ all_dirs.T`), replacing a 360-iteration Python loop
-3. **Numba JIT: inner hue loop** — `_process_hue_loop_nb` compiles the per-cell collect/sort/parity-filter loop to native code; cylmap format changed from Python object array to dense `(l_steps, h_steps, MAX_K, 2)` float64 array + `(l_steps, h_steps)` int64 count array
-4. **Numba JIT: intersection loop** — `_intersect_all_cells_nb` compiles the full 36,000-cell `intersect_gamuts` double-loop to native code, with a pre-allocated temp buffer to avoid per-cell heap allocation
-5. **Vectorised integration** — `_integrate_cylmap` is a single `np.sum` over a masked dense array; no loop
-6. **Numba warm-up at import** — both JIT functions are called with minimal dummy arrays at module load time, so cache-load cost is paid at import rather than on the first real computation
-
-### CLI — Working
-- **`cielab-tools` / `cielab-gamut-tools`**: two entry points, same Typer app
-- **`about`**: standards compliance, citation, algorithm description
-- **`calculate volume`**: single or multiple gamuts; named gamuts (`srgb`, `bt.2020`,
-  `dci-p3`, `display-p3`, `adobe-rgb`) accepted alongside file paths; `--format
-  text/json/csv`; `--standard` traceability metadata; `--quiet` for scripting
-- **`calculate coverage`**: DUT vs one or more comma-separated references; single-
-  reference text shows full breakdown; multiple references render a table
-- **`calculate compare`**: volume+delta mode (default), `--reference` coverage mode,
-  `--matrix` pairwise intersection mode (entry (i,j) = % of column j covered by row i);
-  `--reference` and `--matrix` are mutually exclusive
-- **`_resolve.py`** shared helper: resolves CLI argument to `Gamut` — file path first,
-  then named gamut, two-part error if neither matches
-- **`plot rings`**: 2D ring diagram; `--reference`, `--intersection`, `--output`,
-  `--show` (default when no `--output`), `--dpi`; accepts file paths or named gamuts
-- **`plot surface`**: 3D surface; one or more gamuts overlaid on shared axes;
-  `--output`, `--show`, `--dpi`, `--alpha`
-- **`generate rgb-signals`**: normative RGB test signal list; `--grid`, `--bits`,
-  `--format cgats/csv`
-- **`generate synthetic`**: CGE_MEASUREMENT / CGE_ENVELOPE / combined file for any
-  named reference gamut; `--mode`, `--output`
-
-### Known Gaps
-1. **Intersection ring offset** — `compute_rings()` does not yet implement the IEC 62906-6-1 Formula 3 intersection ring offset variant; deferred until Annex A.3.3 can be verified against MATLAB
+The test suite runs in ~700 ms (Numba JIT warms up at import).
 
 ## Architecture
 
 ```
 src/cielab_gamut_tools/
-├── __init__.py           # Public API: Gamut, SyntheticGamut
-├── gamut.py              # Gamut class - main entry point
+├── __init__.py           # Public API: Gamut, SyntheticGamut, make_rgb_signals
+├── gamut.py              # Gamut class — volume, intersect, plot, to_cgats
 ├── synthetic.py          # SyntheticGamut factory for reference gamuts
+├── measurement.py        # make_rgb_signals(m, bits) — normative test signal set
 ├── io/
-│   └── cgats.py          # CGATS.17 and IDMS v1.3 file parsing
+│   └── cgats.py          # CGATS.17 / IDMS v1.3 reader + writer
 ├── colorspace/
-│   ├── lab.py            # XYZ ↔ CIELab conversions (D50 reference)
-│   ├── adaptation.py     # Bradford chromatic adaptation transform
-│   └── srgb.py           # sRGB gamma encoding/decoding
+│   ├── lab.py            # XYZ ↔ CIELab (D50 reference)
+│   ├── adaptation.py     # Bradford chromatic adaptation
+│   └── srgb.py           # sRGB piecewise gamma
 ├── geometry/
 │   ├── tesselation.py    # RGB cube surface tesselation
-│   └── volume.py         # Cylindrical coordinate mapping & integration
+│   └── volume.py         # Cylindrical map, ray-triangle intersection, Numba JIT
 ├── plotting/
-│   ├── surface.py        # 3D gamut surface visualization
-│   └── rings.py          # 2D gamut rings at L* slices
+│   ├── surface.py        # 3D gamut surface (matplotlib)
+│   └── rings.py          # 2D C*_RSS rings plot
 └── cli/
     ├── __init__.py       # Exports main()
-    ├── _app.py           # Top-level Typer app, --version, command groups
+    ├── _app.py           # Typer app, --version, command groups
     ├── _resolve.py       # resolve_gamut(): file path or named gamut → Gamut
     └── commands/
         ├── about.py      # about command
-        ├── calculate.py  # volume, coverage, compare
-        ├── plot.py       # stub
-        └── generate.py   # stub
+        ├── calculate.py  # volume, coverage, compare subcommands
+        ├── plot.py       # rings, surface subcommands
+        └── generate.py   # rgb-signals, synthetic subcommands
 ```
+
+### Data flow for a measured display
+
+1. `Gamut.from_cgats(path)` reads RGB + XYZ (or RGB + LAB) from a CGATS file
+2. `from_xyz()`: expands measurements to the 726-vertex tessellation via exact RGB lookup (`_expand_colordata_to_tesselation`), extracts the measured white point, applies Bradford CAT from measured white to a luminance-scaled D50, converts to CIELab
+3. `_from_lab_and_rgb()`: used when file has LAB directly; same tessellation expansion, no colorspace conversion
+4. `volume()` / `intersect()` build a cylindrical map (cached on the `Gamut` object) then integrate
+
+## Public API
+
+```python
+from cielab_gamut_tools import Gamut, SyntheticGamut, make_rgb_signals
+
+# Reference gamuts
+srgb       = SyntheticGamut.srgb()
+bt2020     = SyntheticGamut.bt2020()
+dci_p3     = SyntheticGamut.dci_p3()
+display_p3 = SyntheticGamut.display_p3()
+adobe_rgb  = SyntheticGamut.adobe_rgb()
+custom     = SyntheticGamut(primaries_xy, white_xy, gamma=2.2)
+
+# Load from file
+gamut = Gamut.from_cgats("measurements.txt")
+
+# Volume and coverage
+volume   = srgb.volume()                                    # ~830,807
+coverage = gamut.intersect(srgb).volume() / srgb.volume() * 100
+
+# Normative ring metric
+rings = gamut.compute_rings()          # (100, 360) C*_RSS array
+
+# Measurement signals
+signals = make_rgb_signals(m=11, bits=8)   # (602, 3) uint16
+
+# Visualization
+gamut.plot_surface()
+gamut.plot_rings(reference=srgb)
+```
+
+## Implementation Status
+
+The library and all CLI commands are fully implemented with no known gaps.
+
+### Verified results
+- `SyntheticGamut.srgb().volume()` → ~830,807 (MATLAB: 830,766, ~0.005% difference, within 1% tolerance)
+- All three computation paths (direct, from measurement CGATS, from envelope CGATS) give identical results ✓
+- Absolute-luminance measurements (Y ≈ 100 cd/m²) normalised correctly against their own white point ✓
+- BT.2020 volume > sRGB ✓
+- Intersection commutativity: A∩B == B∩A ✓
+- Self-intersection: A∩A == A ✓
 
 ## Critical Implementation Details
 
+### 726 vs 602 vertices — do not confuse these counts
+
+`make_tesselation()` produces **726 vertices** for the standard m=11 grid (6 × 11² = 726). Edge and corner vertices are replicated across adjacent faces so each face's triangle strip is self-contained. This matches MATLAB exactly.
+
+**CGATS files must contain only 602 unique surface points** (6m² − 12m + 8 = 602 for m=11). The MATLAB reference deduplicates with `unique(rgb,'rows')` in `make_rgb_signals.m`.
+
+In Python: `Gamut.to_cgats()` applies `np.unique(rgb_out, axis=0)` before writing. The internal `self.lab`, `self.rgb`, `self.xyz` arrays remain 726 entries. **Never remove the deduplication step from `to_cgats()`.**
+
+### Expanding 602 measurements to 726 tessellation vertices
+
+`_expand_colordata_to_tesselation()` in `gamut.py` matches MATLAB's `map_rows.m`. It first tries an exact integer-space RGB lookup (rounds both the measured grid and the tessellation vertices, matches rows exactly) — the correct path for all standards-compliant 602-point files. If any tessellation vertex has no exact match (non-standard grids), it falls back to scipy `LinearNDInterpolator` + nearest-neighbour for out-of-hull points.
+
+### White-point normalization in from_xyz()
+
+Matches MATLAB `make_gamut_envelope.m`. The measured white point is the XYZ row where all RGB channels are at their maximum. D50 is scaled to the same luminance: `d50_scaled = D50_WHITE_XYZ * white_xyz[1]`. Bradford CAT is applied from the measured white to `d50_scaled`, and `xyz_to_lab()` uses `d50_scaled` as its reference white. For normalised synthetic data (Y_white = 1) this is a no-op.
+
 ### Tesselation (geometry/tesselation.py)
-
-**Must match MATLAB exactly.** Key points:
-
-> **726 vs 602 vertices — do not confuse these two counts.**
->
-> `make_tesselation()` deliberately produces **726 vertices** for the standard m=11
-> grid (6 × 11² = 726). Edge and corner grid points are replicated across adjacent
-> faces so that each face's triangle strip is self-contained. This is geometrically
-> correct and matches the MATLAB `make_tesselation.m` output exactly.
->
-> However, **CGATS files and measurement signal lists must contain only the 602 unique
-> surface points** (6m² − 12m + 8 = 602 for m=11). Measuring a duplicate RGB value
-> twice wastes metrologist time and is not permitted by the standards.
->
-> The MATLAB reference handles this in `make_rgb_signals.m` with:
-> ```matlab
-> [~, rgb] = make_tesselation(V);
-> rgb = unique(rgb, 'rows');   % 726 → 602
-> ```
-> and in `get_volume.m` / `get_d_C.m` it goes the other direction via `map_rows.m`,
-> expanding the 602-point envelope back to the 726-vertex tessellation for ray
-> intersection.
->
-> In Python: `Gamut.to_cgats()` applies `np.unique(rgb_out, axis=0)` before calling
-> `write_cgats()` to ensure all output files contain exactly 602 unique rows.
-> The internal `self.lab`, `self.rgb`, `self.xyz` arrays remain 726 entries for
-> geometric correctness. **Never remove the deduplication step from `to_cgats()`.**
 
 1. **Vertex ordering for consistent winding:**
    - Bottom faces (value=0): `[Lower, J, K]`, `[K, Lower, J]`, `[J, K, Lower]`
    - Top faces (value=1): `[Upper, K, J]`, `[J, Upper, K]`, `[K, J, Upper]`
-   - Note: J,K swapped to K,J for opposite faces - this ensures outward normals
 
-2. **Column-major flattening:** Use `flatten('F')` to match MATLAB's `(:)` operator
+2. **Column-major flattening** to match MATLAB's `(:)` operator:
    ```python
    J, K = np.meshgrid(gsv, gsv)
-   J = J.flatten('F')  # Column-major like MATLAB
+   J = J.flatten('F')
    K = K.flatten('F')
    ```
 
@@ -161,174 +147,81 @@ src/cielab_gamut_tools/
 
 ### Volume Calculation (geometry/volume.py)
 
-Uses ray-triangle intersection (Möller-Trumbore algorithm), NOT rasterization.
+Uses Möller-Trumbore ray-triangle intersection, NOT rasterization.
 
 **Algorithm (matching `CIEtools/cielab_cylindrical_map.m`):**
 
 1. Reorder Lab to `[a*, b*, L*]` to match MATLAB's Z matrix
 2. For each L* slice (100 steps), find triangles spanning that L*
-3. Batch all 360 ray directions into a single matrix multiply per slice
-4. Pass resulting `(n_tri, 360)` arrays to `_process_hue_loop_nb` (Numba JIT)
-5. JIT loop: for each hue, collect valid hits, sort by distance, apply parity filter
-6. Integrate: `V = Σ sign × t² × dL × dh / 2` (fully vectorised, no loop)
+3. Batch all 360 ray directions into a single matrix multiply: `e2e1_2d @ all_dirs.T`
+4. Pass `(n_tri, 360)` arrays to `_process_hue_loop_nb` (Numba JIT)
+5. JIT loop: collect valid hits, sort by distance, apply parity filter
+6. Integrate: `V = Σ sign × t² × dL × dh / 2` (vectorised `np.sum`)
 
 **Cylindrical map format:**
 ```python
-cylmap:  np.ndarray  shape (l_steps, h_steps, MAX_K, 2)  # [..., 0]=sign, [..., 1]=distance
+cylmap:  np.ndarray  shape (l_steps, h_steps, MAX_K, 2)  # [...,0]=sign, [...,1]=distance
 counts:  np.ndarray  shape (l_steps, h_steps)             # valid entries per cell
 ```
-`MAX_K = 4`. Most cells have 0 (below black level) or 1 (origin inside gamut, single
-surface exit) valid intersection after parity filtering; rarely 2.
+`MAX_K = 4`. Cached on the `Gamut` object and shared between `volume()` and `intersect()` calls.
 
 **Parity filter (matching MATLAB exactly):**
 ```python
-# keep entry i where (cumsum of signs from i to end) * 2 - sign == 1
-flipped_signs = cm[::-1, 0]
+flipped_signs  = cm[::-1, 0]
 cumsum_flipped = np.cumsum(flipped_signs)
-parity_check = cumsum_flipped[::-1] * 2 - cm[:, 0]
+parity_check   = cumsum_flipped[::-1] * 2 - cm[:, 0]
 keep = parity_check == 1
 ```
 
-**Key ray direction convention (note: sin,cos not cos,sin):**
+**Ray direction convention (sin,cos not cos,sin — puts 0° along +b* axis):**
 ```python
-dir_2d = np.array([np.sin(hue_mid), np.cos(hue_mid)])  # puts 0° along +b* axis
+dir_2d = np.array([np.sin(hue_mid), np.cos(hue_mid)])
 ```
+
+### Chromatic Adaptation
+
+Bradford transform. Source white is the measured display white point; destination is the luminance-scaled D50. For synthetic gamuts (normalised, Y=1) the scaling is a no-op.
 
 ### RGB to XYZ Matrix (synthetic.py)
 
-**Bug fix applied:** `_build_rgb_to_xyz_matrix()` must return `M` not `M.T`. The matrix is used as `rgb @ M.T` for row-vector multiplication.
+`_build_rgb_to_xyz_matrix()` returns `M` (not `M.T`). Used as `rgb @ M.T` for row-vector multiplication.
 
-### Chromatic Adaptation (colorspace/adaptation.py)
+## Performance
 
-Uses Bradford transform. Two entry points:
+~37× speedup over the original implementation. Optimisations in `geometry/volume.py`:
+1. Cylindrical map cached on `Gamut` object
+2. Vectorised hue loop: all 360 directions batched into a single matrix multiply per L* slice
+3. Numba JIT `_process_hue_loop_nb`: per-cell hit-collect/sort/parity loop
+4. Numba JIT `_intersect_all_cells_nb`: full 36,000-cell intersection double-loop, pre-allocated temp buffer
+5. Vectorised integration: single `np.sum` over masked dense array
+6. Numba warm-up at import: both JIT functions called with minimal dummy arrays at module load
 
-- **`chromatic_adaptation(xyz, source_white_xy, dest_white_xy)`** — takes xy
-  chromaticities; used for synthetic gamuts where the source white is a known
-  standard illuminant
-- **`chromatic_adaptation_xyz(xyz, source_white_xyz, dest_white_xyz)`** — takes XYZ
-  tristimulus values directly; mirrors MATLAB's `camcat_cc(XYZ, XYZn, D50)`; used by
-  `Gamut.from_xyz()` where the source white is extracted from measurement data
+## CLI
 
-### White-Point Normalisation in `Gamut.from_xyz()` — matching `make_gamut_envelope.m`
+Two entry points for the same Typer app: `cielab-tools` and `cielab-gamut-tools`.
 
-This is a critical correctness requirement. Real display measurements have absolute
-XYZ values (peak white Y ≈ 100 cd/m²); synthetic reference gamuts use normalised
-values (Y = 1). The pipeline must work correctly for both.
+- `about` — standards compliance info, citation, algorithm description
+- `calculate volume <gamut>...` — `--format text/json/csv`, `--standard`, `--quiet`
+- `calculate coverage <dut> --reference <ref>[,<ref>...]` — single-ref verbose or multi-ref table
+- `calculate compare <gamut>...` — volume+delta (default), `--reference` coverage mode, `--matrix` pairwise N×N table
+- `plot rings <gamut>` — `--reference`, `--intersection`, `--output`, `--show`, `--dpi`
+- `plot surface <gamut>...` — multiple gamuts overlaid on shared axes; `--output`, `--show`, `--dpi`, `--alpha`
+- `generate rgb-signals` — `--grid`, `--bits`, `--format csv/cgats`
+- `generate synthetic [gamut]` — `--primaries`, `--white`, `--gamma`, `--mode envelope/measurement/all`, `--output`
 
-**Algorithm (matching MATLAB `make_gamut_envelope.m` exactly):**
+Named gamuts accepted everywhere: `srgb`, `bt.2020`, `dci-p3`, `display-p3`, `adobe-rgb`.
 
-```python
-# 1. Find measured white point (XYZ where all RGB channels are at maximum)
-rgb_max = rgb.max()
-white_mask = np.all(np.abs(rgb - rgb_max) < 1e-6, axis=1)
-white_xyz = xyz[white_mask][0]          # XYZn in MATLAB
-
-# 2. Scale D50 reference white to the same luminance as the measured white
-#    Matches MATLAB: D50 = [0.9642, 1, 0.8249] * XYZn(2)
-d50_scaled = D50_WHITE_XYZ * white_xyz[1]
-
-# 3. Bradford CAT from measured white → luminance-scaled D50
-#    Matches MATLAB: XYZ = camcat_cc(XYZ, XYZn, D50)
-xyz_d50 = chromatic_adaptation_xyz(xyz_surface, white_xyz, d50_scaled)
-
-# 4. Convert to CIELab with luminance-scaled D50 as reference
-#    Matches MATLAB: CIELAB = xyz2lab(XYZ, D50)
-lab = xyz_to_lab(xyz_d50, white=d50_scaled)
-```
-
-For synthetic data (Y_white = 1): `d50_scaled = D50_WHITE_XYZ`, and the source white
-is the D65 XYZ at Y=1 — identical to the previous `adapt_d65_to_d50` behaviour.
-For measured displays (Y_white ≈ 100): the luminance scale cancels in the Lab
-conversion (XYZ/d50_scaled), giving correct Lab values regardless of absolute level.
-
-## Public API
-
-```python
-from cielab_gamut_tools import Gamut, SyntheticGamut
-
-# Reference gamuts (WORKING)
-srgb = SyntheticGamut.srgb()
-bt2020 = SyntheticGamut.bt2020()
-dci_p3 = SyntheticGamut.dci_p3()
-custom = SyntheticGamut(primaries_xy, white_xy, gamma=2.2)
-
-# Volume calculation (WORKING)
-volume = srgb.volume()
-
-# Load from CGATS file (WORKING)
-gamut = Gamut.from_cgats("measurements.txt")
-
-# Intersection (WORKING)
-intersection = gamut.intersect(srgb)
-coverage = intersection.volume() / srgb.volume() * 100
-
-# Visualization
-gamut.plot_surface()
-gamut.plot_rings(reference=srgb)
-```
-
-## Next Steps
-
-### Intersection ring offset (Known Gap 1)
-
-`compute_rings()` does not yet implement the IEC 62906-6-1 Formula 3 intersection
-ring offset variant. Deferred until Annex A.3.3 can be verified against MATLAB.
-
-## Development
-
-### Setup
-```bash
-cd cielab-gamut-tools-py
-python -m venv .venv
-source .venv/bin/activate  # or .venv\Scripts\activate on Windows
-pip install -e ".[dev]"
-```
-
-### Commands
-```bash
-pytest                    # Run tests
-pytest --cov=cielab_gamut_tools # With coverage
-mypy src                  # Type checking
-ruff check src tests      # Linting
-```
-
-### Quick Test
-```python
-from cielab_gamut_tools import SyntheticGamut
-print(SyntheticGamut.srgb().volume())  # Should be ~830,807 (within 1% of MATLAB's 830,766)
-```
+`_resolve.py` resolves a CLI argument to a `Gamut`: file path first, then named gamut, two-part error if neither matches.
 
 ## Reference Material
 
-- **MATLAB implementation:** `../cielab-gamut-tools-m/`
-- **Key MATLAB files:**
-  - `SyntheticGamut.m` - Synthetic gamut creation
-  - `CIELabGamut.m` - Gamut from measurements
-  - `GetVolume.m` - Volume calculation entry point
-  - `+CIEtools/cielab_cylindrical_map.m` - Core ray-triangle intersection
-  - `+CIEtools/make_tesselation.m` - RGB cube tesselation
+- **MATLAB implementation:** `../cielab-gamut-tools-m/` (also referred to as `gamut-volume-m/` in test fixtures)
+- **Key MATLAB files:** `SyntheticGamut.m`, `CIELabGamut.m`, `GetVolume.m`, `make_gamut_envelope.m`, `map_rows.m`, `+CIEtools/cielab_cylindrical_map.m`, `+CIEtools/make_tesselation.m`
 - **Publication:** Smith et al., Journal of the Society for Information Display, 2020
-- **Standards:** IEC, ICDM (derived from this code)
-
-## Testing Strategy
-
-Extensive unit testing is a primary goal (improving on limited MATLAB testing).
-
-### Test Categories
-1. **Colorspace** - XYZ↔Lab round-trip, reference values, edge cases
-2. **File I/O** - CGATS parsing, error handling
-3. **Geometry** - Tesselation completeness, volume against MATLAB reference
-4. **Gamut operations** - Volume, intersection properties
-5. **Integration** - Full workflow comparison with MATLAB
-
-### Reference Values
-- sRGB volume: ~830,732 (from MATLAB)
-- Sample files in `tests/data/` and `samples/`
+- **Standards:** IDMS v1.3, IEC 62977-3-5, IEC 62906-6-1
 
 ## Package Configuration
 
-- **Python:** ≥3.10
-- **Package name:** `cielab-gamut-tools` (PyPI), import as `cielab_gamut_tools`
-- **Dependencies:** numpy, matplotlib, scipy, numba (≥0.57)
-- **Build system:** hatchling with pyproject.toml
-- **Layout:** src layout
+- **Python:** ≥3.10; **build:** hatchling; **layout:** src
+- **Dependencies:** numpy, matplotlib, scipy, numba ≥0.57, typer ≥0.9, rich ≥13.0
+- **Dev dependencies:** pytest, pytest-cov, mypy (strict), ruff, hypothesis
