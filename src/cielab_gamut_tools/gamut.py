@@ -101,7 +101,11 @@ class Gamut:
 
         path = Path(path)
         data = read_cgats(path)
-        title = data.metadata.get("title") or path.stem
+        title = (
+            data.metadata.get("DISPLAY_LABEL")
+            or data.metadata.get("title")
+            or path.stem
+        )
 
         if data.xyz is not None:
             if data.rgb is None:

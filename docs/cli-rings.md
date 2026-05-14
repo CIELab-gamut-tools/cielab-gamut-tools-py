@@ -66,6 +66,36 @@ cgt plot rings srgb --l-rings 20,40,60,80
 
 ---
 
+## L* ring labels
+
+By default the L*=10 and L*=50 rings are annotated with their L* value (inner labels
+in white, outermost label in black). Both the choice of rings to label and the text
+colour can be overridden.
+
+| Option | Default | Description |
+|---|---|---|
+| `--l-labels L1,L2,...` | `10,50` | L* values to annotate. Must be present in the ring levels. Pass `none` to suppress all labels. |
+| `--l-label-color COLOR` | — | Colour for all label text (any matplotlib colour string, e.g. `white`, `black`, `#FF8800`). Default colours: outermost label black, others white. |
+
+```bash
+# Label only the outermost ring
+cgt plot rings srgb --l-labels 100
+
+# Label L*=20, 50, and 80
+cgt plot rings srgb --l-labels 20,50,80
+
+# No labels at all
+cgt plot rings srgb --l-labels none
+
+# All labels in black
+cgt plot rings srgb --l-label-color black
+
+# Custom rings with matching labels
+cgt plot rings srgb --l-rings 25,50,75 --l-labels 25,75
+```
+
+---
+
 ## Colour bands
 
 The filled bands between rings are coloured by the approximate hue at each angular
@@ -130,15 +160,54 @@ cgt plot rings srgb --chroma-rings 50,100,150
 
 ---
 
-## Plot decoration
+## Plot title and gamut labels
+
+The auto-generated title has three lines:
+
+```
+CIELab gamut rings
+<identity line>
+Volume = N
+```
+
+The identity line is built from the gamut label(s):
+
+- **DUT only:** `My Display`
+- **DUT + reference:** `My Display / sRGB`
+- **Intersection (`-i`):** `My Display ∩ sRGB`
+
+Gamut labels are derived automatically: the `DISPLAY_LABEL` keyword in the CGATS
+file is used first, then any bare title keyword, then the filename stem. Named
+gamuts (`srgb`, `bt.2020`, etc.) use their standard names.
+
+Use `--label` to override individual labels without touching the descriptor or
+volume lines. Use `--title` to replace the entire title with a custom string.
 
 | Option | Description |
 |---|---|
-| `--title TEXT` | Override the auto-generated plot title. |
+| `--label TEXT` | Comma-separated labels for DUT, reference, reference2 (in order). Empty element keeps the auto-derived label. Example: `--label "LCD RGBW display,"` overrides the DUT label and keeps the reference label auto. |
+| `--title TEXT` | Replace the entire plot title with a custom string (all three lines). |
 | `--no-title` | Suppress the title entirely. |
 | `--figsize W,H` | Figure size in inches (default `8,8`). |
 | `--xlim MIN,MAX` | Override a\* axis limits. Use `--xlim=VAL` for negatives. |
 | `--ylim MIN,MAX` | Override b\* axis limits. Use `--ylim=VAL` for negatives. |
+
+```bash
+# Override DUT label only; reference keeps its auto name
+cgt plot rings display.txt -r srgb --label "LCD RGBW display,"
+
+# Override both labels
+cgt plot rings display.txt -r srgb --label "My Display,sRGB (2024)"
+
+# Intersection with custom DUT label
+cgt plot rings display.txt -r srgb -i --label "Wide gamut panel,"
+
+# Custom title replaces all three lines
+cgt plot rings display.txt --title "Confidential — do not distribute"
+
+# No title at all
+cgt plot rings display.txt --no-title
+```
 
 ---
 
@@ -168,6 +237,8 @@ Supported formats: `.png`, `.pdf`, `.svg`, `.jpg` / `.jpeg`, `.tiff`.
 | `--reference2` | | — | Second reference (outer outline only). |
 | `--intersection` | `-i` | off | Intersection view (requires `-r`). |
 | `--l-rings L,...` | | `10,20,...,90` | Ring L* levels. |
+| `--l-labels L,...` | | `10,50` | L* values to annotate. `none` suppresses all. |
+| `--l-label-color COLOR` | | default | Label text colour. Default: outermost black, others white. |
 | `--bands` / `--no-bands` | | on | Colour-fill bands. |
 | `--band-chroma F` | | 50 | Band fill chroma. |
 | `--band-ls V` or `LO,HI` | | `20,90` | Band lightness. |
@@ -177,7 +248,8 @@ Supported formats: `.png`, `.pdf`, `.svg`, `.jpg` / `.jpeg`, `.tiff`.
 | `--primary-origin` | | `centre` | Arrow origin: `centre` or `ring`. |
 | `--cent-mark` / `--no-cent-mark` | | on | Centre cross marker. |
 | `--chroma-rings C,...` | | — | Constant-chroma reference circles. |
-| `--title TEXT` | | auto | Plot title. |
+| `--label TEXT` | | — | Comma-separated gamut labels (DUT, ref, ref2). |
+| `--title TEXT` | | auto | Replace entire plot title. |
 | `--no-title` | | — | Suppress title. |
 | `--figsize W,H` | | `8,8` | Figure size in inches. |
 | `--xlim MIN,MAX` | | auto | a\* axis limits. |

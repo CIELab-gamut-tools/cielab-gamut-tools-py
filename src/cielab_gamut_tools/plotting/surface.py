@@ -27,6 +27,7 @@ def plot_surface(
     show_axes: bool = True,
     figsize: tuple[float, float] = (10.0, 8.0),
     title: str | None = None,
+    label: str | None = None,
     xlim: tuple[float, float] = (-128.0, 128.0),
     ylim: tuple[float, float] = (-128.0, 128.0),
     zlim: tuple[float, float] = (0.0, 100.0),
@@ -110,6 +111,8 @@ def plot_surface(
         verts.append(lab[tri][:, [1, 2, 0]])  # a*, b*, L*
         face_rgbs.append(np.mean(rgb[tri], axis=0))
 
+    mean_face_rgb = np.mean(np.array(face_rgbs), axis=0) if face_rgbs else np.array([0.5, 0.5, 0.5])
+
     poly = Poly3DCollection(verts)
 
     if wireframe:
@@ -117,6 +120,7 @@ def plot_surface(
             import matplotlib.colors as mcolors
             r, g, b = mcolors.to_rgb(color)
             edge_colors: list = [(r, g, b, alpha)] * len(verts)
+            legend_color: np.ndarray = np.array([r, g, b])
         elif chroma is not None or lightness is not None:
             # Apply chroma/lightness modifications in Lab before converting
             lab_e = lab.copy()
@@ -130,8 +134,10 @@ def plot_surface(
             rgb_lin_e = np.clip(rgb_lin_e, 0, 1)
             rgb_e = srgb_gamma_encode(rgb_lin_e)
             edge_colors = [(*np.mean(rgb_e[tri], axis=0), alpha) for tri in triangles]
+            legend_color = np.mean(np.array([ec[:3] for ec in edge_colors]), axis=0)
         else:
             edge_colors = [(*fc, alpha) for fc in face_rgbs]
+            legend_color = mean_face_rgb
 
         poly.set_facecolor([(0.0, 0.0, 0.0, 0.0)] * len(verts))
         poly.set_edgecolor(edge_colors)
@@ -141,8 +147,19 @@ def plot_surface(
         poly.set_facecolor(face_rgbs)
         poly.set_edgecolor("none")
         poly.set_alpha(alpha)
+        legend_color = mean_face_rgb
 
     ax.add_collection3d(poly)
+
+    if label is not None:
+        from matplotlib.patches import Patch
+        if wireframe:
+            proxy = Patch(fill=False, edgecolor=legend_color, linewidth=1.5, label=label)
+        else:
+            proxy = Patch(facecolor=legend_color, label=label)
+        if not hasattr(ax, "_gamut_legend_handles"):
+            ax._gamut_legend_handles = []
+        ax._gamut_legend_handles.append(proxy)
 
     if show_axes:
         ax.set_xlabel("a*")

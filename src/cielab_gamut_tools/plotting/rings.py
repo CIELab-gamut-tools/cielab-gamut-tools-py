@@ -71,6 +71,9 @@ def plot_rings(
     ref_primaries: Literal["none", "rgb", "all"] = "none",
     ref_primary_chroma: float | Literal["auto"] = "auto",
     ref_primary_origin: Literal["centre", "center", "ring"] = "ring",
+    # Per-gamut label overrides (override gamut.title for title assembly only)
+    dut_label: str | None = None,
+    ref_label: str | None = None,
     # Decorations
     cent_mark: str | None = "+k",
     cent_mark_size: float = 20.0,
@@ -316,10 +319,16 @@ def plot_rings(
     ax.set_ylabel("b*$_{RSS}$")
 
     if title == "auto":
-        gamut_title = getattr(_g, "title", None) or ""
+        dut_name = dut_label if dut_label is not None else (getattr(_g, "title", None) or "")
         vol_label = orig_vol if orig_vol is not None else test_vol
-        if gamut_title:
-            ax.set_title(f"CIELab gamut rings\n{gamut_title}\nVolume = {vol_label:.0f}")
+        if _ref is not None:
+            ref_name = ref_label if ref_label is not None else (getattr(_ref, "title", None) or "")
+            sep = " ∩ " if intersection_plot else " / "
+            identity = f"{dut_name}{sep}{ref_name}" if (dut_name and ref_name) else (dut_name or ref_name)
+        else:
+            identity = dut_name
+        if identity:
+            ax.set_title(f"CIELab gamut rings\n{identity}\nVolume = {vol_label:.0f}")
         else:
             ax.set_title(f"CIELab gamut rings\nVolume = {vol_label:.0f}")
     elif title is not None:

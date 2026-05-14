@@ -280,6 +280,64 @@ class TestPlotRingsNewOptions:
 
 
 # ---------------------------------------------------------------------------
+# rings — --label
+# ---------------------------------------------------------------------------
+
+class TestPlotRingsLabel:
+    def test_label_dut_override(self, tmp_path):
+        out = tmp_path / "rings.png"
+        result = runner.invoke(
+            app,
+            ["plot", "rings", "srgb", "--label", "Custom DUT", "--output", str(out)],
+        )
+        assert result.exit_code == 0, result.output
+        assert out.exists()
+
+    def test_label_dut_only_with_reference(self, tmp_path):
+        out = tmp_path / "rings.png"
+        result = runner.invoke(
+            app,
+            [
+                "plot", "rings", "bt.2020",
+                "--reference", "srgb",
+                "--label", "Wide Gamut Display,",
+                "--output", str(out),
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        assert out.exists()
+
+    def test_label_intersection(self, tmp_path):
+        out = tmp_path / "rings.png"
+        result = runner.invoke(
+            app,
+            [
+                "plot", "rings", "bt.2020",
+                "--reference", "srgb",
+                "--intersection",
+                "--label", "My Display,",
+                "--output", str(out),
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        assert out.exists()
+
+    def test_label_both_dut_and_ref(self, tmp_path):
+        out = tmp_path / "rings.png"
+        result = runner.invoke(
+            app,
+            [
+                "plot", "rings", "bt.2020",
+                "--reference", "srgb",
+                "--label", "DUT Name,Ref Name",
+                "--output", str(out),
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        assert out.exists()
+
+
+# ---------------------------------------------------------------------------
 # surface — save to file
 # ---------------------------------------------------------------------------
 
@@ -592,3 +650,79 @@ class TestPlotSurfaceWireframe:
             app, ["plot", "surface", "srgb", "--style", "alpha:notanumber", "--output", str(out)]
         )
         assert result.exit_code != 0
+
+
+# ---------------------------------------------------------------------------
+# surface — --label and --legend
+# ---------------------------------------------------------------------------
+
+class TestPlotSurfaceLabelLegend:
+    def test_label_single_gamut(self, tmp_path):
+        out = tmp_path / "surface.png"
+        result = runner.invoke(
+            app,
+            ["plot", "surface", "srgb", "--label", "sRGB reference", "--legend", "--output", str(out)],
+        )
+        assert result.exit_code == 0, result.output
+        assert out.exists()
+
+    def test_legend_auto_on_for_multi_gamut(self, tmp_path):
+        out = tmp_path / "surface.png"
+        result = runner.invoke(
+            app,
+            ["plot", "surface", "srgb", "bt.2020", "--output", str(out)],
+        )
+        assert result.exit_code == 0, result.output
+        assert out.exists()
+
+    def test_legend_explicit_multi_gamut(self, tmp_path):
+        out = tmp_path / "surface.png"
+        result = runner.invoke(
+            app,
+            [
+                "plot", "surface", "srgb", "bt.2020",
+                "--label", "sRGB,BT.2020",
+                "--legend",
+                "--output", str(out),
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        assert out.exists()
+
+    def test_no_legend_suppresses_legend(self, tmp_path):
+        out = tmp_path / "surface.png"
+        result = runner.invoke(
+            app,
+            ["plot", "surface", "srgb", "bt.2020", "--no-legend", "--output", str(out)],
+        )
+        assert result.exit_code == 0, result.output
+        assert out.exists()
+
+    def test_label_partial_override(self, tmp_path):
+        out = tmp_path / "surface.png"
+        result = runner.invoke(
+            app,
+            [
+                "plot", "surface", "srgb", "bt.2020", "dci-p3",
+                "--label", "My sRGB,,P3",
+                "--legend",
+                "--output", str(out),
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        assert out.exists()
+
+    def test_wireframe_with_legend(self, tmp_path):
+        out = tmp_path / "surface.png"
+        result = runner.invoke(
+            app,
+            [
+                "plot", "surface", "srgb", "bt.2020",
+                "--style", "wireframe,wireframe",
+                "--label", "sRGB,BT.2020",
+                "--legend",
+                "--output", str(out),
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        assert out.exists()

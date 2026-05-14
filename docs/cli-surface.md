@@ -123,10 +123,40 @@ cgt plot surface srgb --elev 45 --azim 30
 
 ---
 
+## Gamut labels and legend
+
+Use `--label` to name each gamut. Labels appear in the legend and are derived
+automatically when not specified: the `DISPLAY_LABEL` keyword in the CGATS file
+is used first, then the filename stem, then the named gamut's standard name.
+
+`--label` takes a comma-separated list aligned positionally with the gamut
+arguments. An empty element keeps the auto-derived label.
+
+The legend is shown by default when multiple gamuts are plotted. Use `--legend`
+or `--no-legend` to force it on or off.
+
+```bash
+# Two gamuts with explicit labels and legend
+cgt plot surface srgb bt.2020 --label "sRGB,BT.2020" --legend -o comparison.png
+
+# Override only the first label; second keeps its auto name
+cgt plot surface display.txt srgb --label "Wide gamut panel," --legend -o out.png
+
+# Single gamut with a legend entry
+cgt plot surface display.txt --label "Prototype A" --legend -o out.png
+
+# Multiple gamuts, suppress the auto legend
+cgt plot surface srgb bt.2020 --no-legend -o out.png
+```
+
+---
+
 ## Plot decoration
 
 | Option | Default | Description |
 |---|---|---|
+| `--label TEXT` | — | Comma-separated gamut labels (aligned with gamut arguments). Empty element keeps auto-derived label. |
+| `--legend` / `--no-legend` | on for multiple gamuts | Show or hide the gamut legend. |
 | `--title TEXT` | — | Set the plot title. |
 | `--figsize W,H` | `10,8` | Figure size in inches. |
 | `--xlim MIN,MAX` | `-128,128` | a\* axis limits. Use `--xlim=VAL` for negatives. |
@@ -160,6 +190,8 @@ Supported formats: `.png`, `.pdf`, `.svg`, `.jpg` / `.jpeg`, `.tiff`.
 | `--alpha F` | | 0.8 | Global solid surface transparency. |
 | `--wireframe` | | off | All gamuts as wireframe. |
 | `--style TEXT` | | — | Per-gamut style string (see above). |
+| `--label TEXT` | | — | Comma-separated gamut labels. |
+| `--legend` / `--no-legend` | | on for multiple gamuts | Show or hide legend. |
 | `--title TEXT` | | — | Plot title. |
 | `--figsize W,H` | | `10,8` | Figure size in inches. |
 | `--xlim MIN,MAX` | | `-128,128` | a\* axis limits. |

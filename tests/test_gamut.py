@@ -41,6 +41,34 @@ class TestGamutCreation:
         gamut = Gamut.from_cgats(SAMPLES_DIR / "sRGB.txt")
         assert gamut.lab.shape[1] == 3
 
+    def test_from_cgats_display_label(self, tmp_path):
+        """DISPLAY_LABEL keyword in CGATS file should be used as gamut title."""
+        from cielab_gamut_tools.cli._app import app
+        from typer.testing import CliRunner
+
+        runner = CliRunner()
+        cgats_path = tmp_path / "display.txt"
+        runner.invoke(app, ["generate", "synthetic", "srgb", "--output", str(cgats_path), "--mode", "envelope"])
+
+        # Prepend DISPLAY_LABEL to the file
+        content = cgats_path.read_text()
+        cgats_path.write_text('DISPLAY_LABEL\t"My Test Display"\n' + content)
+
+        gamut = Gamut.from_cgats(cgats_path)
+        assert gamut.title == "My Test Display"
+
+    def test_from_cgats_title_fallback_to_stem(self, tmp_path):
+        """When no DISPLAY_LABEL or title keyword, gamut.title falls back to filename stem."""
+        from cielab_gamut_tools.cli._app import app
+        from typer.testing import CliRunner
+
+        runner = CliRunner()
+        cgats_path = tmp_path / "my_display.txt"
+        runner.invoke(app, ["generate", "synthetic", "srgb", "--output", str(cgats_path), "--mode", "envelope"])
+
+        gamut = Gamut.from_cgats(cgats_path)
+        assert gamut.title == "my_display"
+
 
 class TestSyntheticGamut:
     """Tests for SyntheticGamut factory."""

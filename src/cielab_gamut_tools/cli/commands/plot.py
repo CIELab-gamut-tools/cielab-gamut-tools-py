@@ -160,6 +160,15 @@ def _parse_style_element(raw: str) -> dict:
     return result
 
 
+def _parse_label_list(label_str: str, n_slots: int) -> list[str | None]:
+    """Split --label by comma; empty elements → None (keep auto-derived label)."""
+    parts = label_str.split(",")
+    return [
+        (parts[i].strip() or None) if i < len(parts) else None
+        for i in range(n_slots)
+    ]
+
+
 def _parse_style_list(style_str: str, n_gamuts: int) -> list[dict]:
     """Split --style by comma and parse each element into plot_surface kwargs."""
     parts = style_str.split(",")
@@ -283,6 +292,27 @@ def rings(
             help="Show/hide the centre cross marker (default: show).",
         ),
     ] = True,
+    # ── L* ring labels ────────────────────────────────────────────────────────
+    l_labels: Annotated[
+        Optional[str],
+        typer.Option(
+            "--l-labels",
+            help=(
+                "L* values to annotate on the rings, comma-separated (e.g. '10,50'). "
+                "Default: '10,50'. Pass 'none' to suppress all labels."
+            ),
+        ),
+    ] = None,
+    l_label_color: Annotated[
+        Optional[str],
+        typer.Option(
+            "--l-label-color",
+            help=(
+                "Colour for all L* ring labels (any matplotlib colour string, e.g. 'white', "
+                "'black', '#FF8800'). Default: outermost label black, inner labels white."
+            ),
+        ),
+    ] = None,
     # ── Constant-chroma reference circles ────────────────────────────────────
     chroma_rings: Annotated[
         Optional[str],
@@ -292,9 +322,20 @@ def rings(
         ),
     ] = None,
     # ── Plot decoration ───────────────────────────────────────────────────────
+    label: Annotated[
+        Optional[str],
+        typer.Option(
+            "--label",
+            help=(
+                "Comma-separated gamut labels in order: DUT, reference, reference2. "
+                "Empty element keeps the auto-derived label (DISPLAY_LABEL or filename). "
+                "Example: --label \"LCD RGBW display,\" overrides DUT, keeps reference auto."
+            ),
+        ),
+    ] = None,
     title: Annotated[
         Optional[str],
-        typer.Option("--title", help="Override the auto-generated plot title."),
+        typer.Option("--title", help="Override the entire plot title (all lines)."),
     ] = None,
     no_title: Annotated[
         bool,
@@ -382,6 +423,30 @@ def rings(
     else:
         resolved_title = "auto"
 
+    # ── Parse --label ────────────────────────────────────────────────────────
+    parsed_labels = _parse_label_list(label, 3) if label is not None else [None, None, None]
+
+    # ── Resolve L* label indices ─────────────────────────────────────────────
+    parsed_l_label_indices: list[int] | None = None
+    if l_labels is not None:
+        if l_labels.strip().lower() == "none":
+            parsed_l_label_indices = []
+        else:
+            label_ls_vals = _parse_float_list(l_labels, "--l-labels")
+            effective_l_rings = parsed_l_rings if parsed_l_rings is not None else list(range(10, 100, 10))
+            all_l = [float(v) for v in effective_l_rings] + [100.0]
+            parsed_l_label_indices = []
+            for lv in label_ls_vals:
+                diffs = [abs(al - lv) for al in all_l]
+                best = min(diffs)
+                if best < 1.0:
+                    parsed_l_label_indices.append(diffs.index(best))
+                else:
+                    err_console.print(
+                        f"[yellow]Warning: L*={lv} not in ring levels "
+                        f"({', '.join(str(int(v)) for v in all_l)}), skipping.[/yellow]"
+                    )
+
     # ── Build kwargs ─────────────────────────────────────────────────────────
     kwargs: dict = dict(
         intersection_plot=intersection,
@@ -394,6 +459,8 @@ def rings(
         chroma_rings=parsed_chroma_rings,
         figsize=parsed_figsize,
         title=resolved_title,
+        dut_label=parsed_labels[0],
+        ref_label=parsed_labels[1],
     )
     if parsed_l_rings is not None:
         kwargs["l_rings"] = parsed_l_rings
@@ -405,6 +472,10 @@ def rings(
         kwargs["xlim"] = parsed_xlim
     if parsed_ylim is not None:
         kwargs["ylim"] = parsed_ylim
+    if parsed_l_label_indices is not None:
+        kwargs["l_label_indices"] = parsed_l_label_indices
+    if l_label_color is not None:
+        kwargs["l_label_colors"] = l_label_color
 
     dut_gamut = resolve_gamut(gamut)
     ref_gamut = resolve_gamut(reference) if reference is not None else None
@@ -453,6 +524,25 @@ def surface(
         ),
     ] = None,
     # ── Plot decoration ───────────────────────────────────────────────────────
+    label: Annotated[
+        Optional[str],
+        typer.Option(
+            "--label",
+            help=(
+                "Comma-separated labels for each gamut (aligned with gamut arguments). "
+                "Empty element keeps the auto-derived label (DISPLAY_LABEL or filename). "
+                "Example: --label \"Wide gamut,sRGB reference\". "
+                "Labels appear in the legend when --legend is active."
+            ),
+        ),
+    ] = None,
+    legend: Annotated[
+        Optional[bool],
+        typer.Option(
+            "--legend/--no-legend",
+            help="Show a legend identifying each gamut (default: on when multiple gamuts).",
+        ),
+    ] = None,
     title: Annotated[
         Optional[str],
         typer.Option("--title", help="Set the plot title."),
@@ -531,6 +621,23 @@ def surface(
         else [{"wireframe": wireframe, "alpha": global_alpha}] * len(gamuts)
     )
 
+    # ── Resolve legend default and labels ────────────────────────────────────
+    show_legend = (len(gamuts) > 1) if legend is None else legend
+    parsed_labels = _parse_label_list(label, len(gamuts)) if label is not None else [None] * len(gamuts)
+    # When legend is active, fill missing labels from auto-derived gamut titles
+    if show_legend:
+        resolved_gamuts = [resolve_gamut(arg) for arg in gamuts]
+        parsed_labels = [
+            lbl if lbl is not None else (g.title or arg)
+            for lbl, g, arg in zip(parsed_labels, resolved_gamuts, gamuts)
+        ]
+        gamut_iter = zip(resolved_gamuts, per_gamut_styles, parsed_labels)
+    else:
+        gamut_iter = [
+            (resolve_gamut(arg), style_kwargs, lbl)
+            for arg, style_kwargs, lbl in zip(gamuts, per_gamut_styles, parsed_labels)
+        ]
+
     import matplotlib.pyplot as plt
 
     from cielab_gamut_tools.plotting.surface import plot_surface
@@ -538,9 +645,8 @@ def surface(
     fig = plt.figure(figsize=parsed_figsize)
     ax = fig.add_subplot(111, projection="3d")
 
-    for arg, style_kwargs in zip(gamuts, per_gamut_styles):
-        g = resolve_gamut(arg)
-        plot_surface(g, ax=ax, **style_kwargs)
+    for g, style_kwargs, lbl in gamut_iter:
+        plot_surface(g, ax=ax, label=lbl, **style_kwargs)
 
     # Apply overrides to the shared axes after all gamuts are drawn
     if title is not None:
@@ -553,5 +659,10 @@ def surface(
         ax.set_zlim(*parsed_zlim)
     if elev is not None or azim is not None:
         ax.view_init(elev=elev, azim=azim)
+
+    if show_legend:
+        handles = getattr(ax, "_gamut_legend_handles", [])
+        if handles:
+            ax.legend(handles=handles)
 
     _save_or_show(fig, output, show, dpi)
