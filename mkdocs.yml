@@ -1,0 +1,28 @@
+site_name: cielab-gamut-tools
+site_description: Calculate and visualize CIELab colour gamuts of displays
+site_url: https://cielab-gamut-tools.readthedocs.io/
+repo_url: https://github.com/CIELab-gamut-tools/cielab-gamut-tools-py
+repo_name: CIELab-gamut-tools/cielab-gamut-tools-py
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+plugins:
+  - search
+  - include-markdown
+
+nav:
+  - Home: index.md
+  - CLI Reference:
+    - Rings diagram: cli-rings.md
+    - Surface plot: cli-surface.md

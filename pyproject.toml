@@ -49,6 +49,11 @@ dev = [
     "ruff>=0.1",
     "hypothesis>=6.0",
 ]
+docs = [
+    "mkdocs>=1.5",
+    "mkdocs-material>=9.0",
+    "mkdocs-include-markdown-plugin>=6.0",
+]
 
 [project.scripts]
 cielab-gamut-tools = "cielab_gamut_tools.cli:main"
@@ -57,6 +62,7 @@ cgt = "cielab_gamut_tools.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/CIELab-gamut-tools/cielab-gamut-tools-py"
+Documentation = "https://cielab-gamut-tools.readthedocs.io"
 Repository = "https://github.com/CIELab-gamut-tools/cielab-gamut-tools-py"
 Issues = "https://github.com/CIELab-gamut-tools/cielab-gamut-tools-py/issues"
 
