@@ -70,8 +70,9 @@ class Gamut:
         self.xyz = xyz
         self.title = title
         self._volume: float | None = None
-        self._cylindrical_map: NDArray[np.floating] | None = None
-        self._cylmap_counts: NDArray[np.integer] | None = None
+        self._cylmap_counts: NDArray[np.uint8] | None = None
+        self._cylmap_chroma: NDArray[np.float32] | None = None
+        self._cylmap_offsets: NDArray[np.int32] | None = None
 
     @classmethod
     def from_cgats(cls, path: str | Path) -> Gamut:

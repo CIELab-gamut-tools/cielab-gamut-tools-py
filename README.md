@@ -240,12 +240,27 @@ pip install -e ".[dev]"
 pytest
 ```
 
-## Citation
+## Citations
 
 If you use this software in academic work, please cite:
 
-> Smith, E., et al. (2020). "Gamut volume calculation for display color characterization."  
-> Journal of the Society for Information Display.
+**Gamut volume calculation:**
+> E. Smith, R. L. Heckaman, K. Lang, J. Penczek, J. Bergquist (2020).
+> "Measuring the color capability of modern display systems."
+> *Journal of the Society for Information Display*, 28(6), 548–556.
+> https://doi.org/10.1002/jsid.918
+
+**Gamut rings concept:**
+> K. Masaoka, F. Jiang, M. D. Fairchild, R. L. Heckaman (2020).
+> "Analysis of color volume of multi-chromatic displays using gamut rings."
+> *Journal of the Society for Information Display*, 28(3), 273–286.
+> https://doi.org/10.1002/jsid.852
+
+**Gamut ring intersection:**
+> K. Masaoka, E. Smith, K. Lang, B. Berkeley, J. Bergquist, J. Penczek (2025).
+> "Visualization of reproducible object colors in standard color spaces using the gamut ring intersection."
+> *Journal of the Society for Information Display*, 33(4), 231–245.
+> https://doi.org/10.1002/jsid.2031
 
 ## License
 

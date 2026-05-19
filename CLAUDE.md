@@ -108,6 +108,7 @@ The library and all CLI commands are fully implemented with no known gaps.
 - `SyntheticGamut.srgb().volume()` → ~830,807 (MATLAB: 830,766, ~0.005% difference, within 1% tolerance)
 - All three computation paths (direct, from measurement CGATS, from envelope CGATS) give identical results ✓
 - Absolute-luminance measurements (Y ≈ 100 cd/m²) normalised correctly against their own white point ✓
+- Reflective display (E Ink Sample 4) volume → ~1,776 (MATLAB: 1,776) ✓ — requires `ILLUMINATION_PERFECT_DIFFUSE_REFLECTOR_XYZ` white-point override
 - BT.2020 volume > sRGB ✓
 - Intersection commutativity: A∩B == B∩A ✓
 - Self-intersection: A∩A == A ✓
@@ -129,6 +130,8 @@ In Python: `Gamut.to_cgats()` applies `np.unique(rgb_out, axis=0)` before writin
 ### White-point normalization in from_xyz()
 
 Matches MATLAB `make_gamut_envelope.m`. The measured white point is the XYZ row where all RGB channels are at their maximum. D50 is scaled to the same luminance: `d50_scaled = D50_WHITE_XYZ * white_xyz[1]`. Bradford CAT is applied from the measured white to `d50_scaled`, and `xyz_to_lab()` uses `d50_scaled` as its reference white. For normalised synthetic data (Y_white = 1) this is a no-op.
+
+**Reflective display override (IDMS v1.3 §5.4):** When the CGATS metadata contains `ILLUMINATION_PERFECT_DIFFUSE_REFLECTOR_XYZ`, that value replaces the RGB-derived white point. For reflective displays (e-paper, print) the perfect diffuse reflector is the correct reference white — the display's maximum RGB patch (Y ≈ 24 for a typical e-paper) is far dimmer than the paper white (Y = 100), so using the RGB-derived white inflates all L* values by ~2× and the volume by ~4×. The override is applied in `from_xyz()` after the RGB-based detection, so emissive displays without the keyword are unaffected.
 
 ### Tesselation (geometry/tesselation.py)
 
@@ -155,15 +158,28 @@ Uses Möller-Trumbore ray-triangle intersection, NOT rasterization.
 2. For each L* slice (100 steps), find triangles spanning that L*
 3. Batch all 360 ray directions into a single matrix multiply: `e2e1_2d @ all_dirs.T`
 4. Pass `(n_tri, 360)` arrays to `_process_hue_loop_nb` (Numba JIT)
-5. JIT loop: collect valid hits, sort by distance, apply parity filter
+5. JIT loop: collect valid hits, sort ascending, apply parity filter, reverse to outside-in
 6. Integrate: `V = Σ sign × t² × dL × dh / 2` (vectorised `np.sum`)
 
-**Cylindrical map format:**
+**Cylindrical map — storage format (cached on `Gamut` object):**
 ```python
-cylmap:  np.ndarray  shape (l_steps, h_steps, MAX_K, 2)  # [...,0]=sign, [...,1]=distance
-counts:  np.ndarray  shape (l_steps, h_steps)             # valid entries per cell
+_cylmap_counts:  uint8   (l_steps, h_steps)      # parity-filtered intersection count per cell
+_cylmap_chroma:  float32 [sum(counts)]            # distances only, outside-in per cell, row-major
+_cylmap_offsets: int32   [l_steps × h_steps]      # prefix-sum of counts for O(1) cell access
 ```
-`MAX_K = 4`. Cached on the `Gamut` object and shared between `volume()` and `intersect()` calls.
+
+Signs are **implicit**: position within a cell determines sign (even index = outward = +1, odd = inward = −1). This is guaranteed by the parity filter: the outermost retained crossing always faces outward. Storing distances only halves memory and simplifies the UI transfer format.
+
+**Cylindrical map — computation format (unpacked on demand):**
+```python
+cylmap:  float64  (l_steps, h_steps, max_k, 2)   # [...,0]=sign (explicit), [...,1]=distance
+counts:  int64    (l_steps, h_steps)
+```
+`max_k = counts.max()` — data-driven, not a fixed constant. `_unpack_cylmap()` reconstructs explicit signs from position. `get_cylindrical_map()` always returns this dense form; callers are unchanged. The unpack is O(sum(counts)) and takes < 1 ms.
+
+**No hard intersection limit.** `_process_hue_loop_nb` pre-allocates its working buffer to `h_steps × n_tri` (the absolute maximum before parity filtering). `_intersect_all_cells_nb` outputs to a buffer of depth `max_k_a + max_k_b` (a tight upper bound). The only ceiling is the number of triangles spanning a given L* slice.
+
+**Parity invariant (checked after every build):** Within each L* slice all 360 rays originate from the same point (L*, 0, 0), which is either inside or outside the gamut cross-section. All intersection counts in a slice must therefore share the same parity. `_check_cylmap_parity()` raises `RuntimeError` on violation (indicates a tessellation gap or self-intersection).
 
 **Parity filter (matching MATLAB exactly):**
 ```python
@@ -189,11 +205,11 @@ Bradford transform. Source white is the measured display white point; destinatio
 ## Performance
 
 ~37× speedup over the original implementation. Optimisations in `geometry/volume.py`:
-1. Cylindrical map cached on `Gamut` object
+1. Packed cylmap cached on `Gamut` object (built once; unpack to dense is < 1 ms)
 2. Vectorised hue loop: all 360 directions batched into a single matrix multiply per L* slice
-3. Numba JIT `_process_hue_loop_nb`: per-cell hit-collect/sort/parity loop
-4. Numba JIT `_intersect_all_cells_nb`: full 36,000-cell intersection double-loop, pre-allocated temp buffer
-5. Vectorised integration: single `np.sum` over masked dense array
+3. Numba JIT `_process_hue_loop_nb`: per-cell hit-collect/sort/parity/pack loop; working buffer sized to `h_steps × n_tri` (no fixed limit)
+4. Numba JIT `_intersect_all_cells_nb`: full 36,000-cell intersection double-loop; output depth `max_k_a + max_k_b` (no truncation possible)
+5. Vectorised integration: single `np.sum` over masked dense array; `max_k` is `counts.max()` so the array is as small as the data allows
 6. Numba warm-up at import: both JIT functions called with minimal dummy arrays at module load
 
 ## CLI
@@ -217,7 +233,9 @@ Named gamuts accepted everywhere: `srgb`, `bt.2020`, `dci-p3`, `display-p3`, `ad
 
 - **MATLAB implementation:** `../cielab-gamut-tools-m/` (also referred to as `gamut-volume-m/` in test fixtures)
 - **Key MATLAB files:** `SyntheticGamut.m`, `CIELabGamut.m`, `GetVolume.m`, `make_gamut_envelope.m`, `map_rows.m`, `+CIEtools/cielab_cylindrical_map.m`, `+CIEtools/make_tesselation.m`
-- **Publication:** Smith et al., Journal of the Society for Information Display, 2020
+- **Gamut volume paper:** E. Smith, R. L. Heckaman, K. Lang, J. Penczek, J. Bergquist — JSID 28(6), 2020, 548–556. https://doi.org/10.1002/jsid.918
+- **Gamut rings paper:** K. Masaoka, F. Jiang, M. D. Fairchild, R. L. Heckaman — JSID 28(3), 2020, 273–286. https://doi.org/10.1002/jsid.852
+- **Gamut ring intersection paper:** K. Masaoka, E. Smith, K. Lang, B. Berkeley, J. Bergquist, J. Penczek — JSID 33(4), 2025, 231–245. https://doi.org/10.1002/jsid.2031
 - **Standards:** IDMS v1.3, IEC 62977-3-5, IEC 62906-6-1
 
 ## Package Configuration

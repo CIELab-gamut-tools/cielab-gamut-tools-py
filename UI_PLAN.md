@@ -17,7 +17,8 @@ uint8[]    counts[l_steps × h_steps], row-major   (~36 KB)
 uint8[]    padding to 4-byte boundary
 float32[]  chroma[sum(counts)], outside-in per cell  (~288 KB typical)
 ```
-Direction is implicit: index 0 within each cell is outward-facing, alternating thereafter.
+Sign is implicit from position within cell: even index = outward (+1), odd = inward (−1).
+This matches the storage format on the Python `Gamut` object (`_cylmap_counts`, `_cylmap_chroma`).
 JS builds a prefix-sum offset table on receipt for O(1) cell access.
 
 ### Stack
@@ -41,40 +42,46 @@ Run both servers in parallel:
 
 ---
 
-## Stage 0 — Fix cylindrical map representation (correctness prerequisite)
+## Stage 0 — Fix cylindrical map representation ✓ COMPLETE
 
-Must land before any UI work. Correctness fix to core computation.
+Two correctness fixes landed together; full test suite passes.
 
-**The bug:** `MAX_K=4` in `_process_hue_loop_nb` truncates intersections before the parity
-filter runs. Duplicate/bad entries from tile boundaries eat into the budget, silently
-dropping real intersections for non-convex gamuts (print, reflective). MATLAB uses cell
-arrays with no such limit.
+### Fix 1 — Reflective display white point
 
-**Fix in `geometry/volume.py`:**
-- Increase working buffer inside `_process_hue_loop_nb` to `MAX_K=64` (Numba
-  pre-allocated, never exposed outside the JIT)
-- Within the JIT: collect all hits into the working buffer, sort **descending by t**
-  (outside-in, largest chroma first), apply parity filter, write post-filter values to output
-- Replace the dense `(l_steps, h_steps, MAX_K, 2)` cylmap with two arrays:
-  - `counts`: `uint8 (l_steps, h_steps)` — post-filter intersection count per cell
-  - `chroma`: `float32 [sum(counts)]` — flat, outside-in ordered, one contiguous block
-    per cell in row-major order
-- Direction is implicit and must never be stored — convention: index 0 = outward-facing,
-  alternating inward/outward thereafter. Outside-in ordering is enforced here to avoid
-  the sign-tracking headaches of inside-out ordering.
-- Precompute prefix-sum offset table alongside counts for O(1) cell access
-- Add assertion: `counts.max() <= MAX_K_WORKING` with a clear error message if triggered
-- Update `volume()` and `intersect()` to consume the new format
-- Update Numba warm-up calls at module load
+`Gamut.from_xyz()` now checks CGATS metadata for
+`ILLUMINATION_PERFECT_DIFFUSE_REFLECTOR_XYZ` and uses it as the white point
+when present, overriding the RGB=(255,255,255) row.  Without this fix,
+reflective displays (e-paper, print) had their L* values inflated by ~2× and
+volume by ~4× (e.g. E Ink Sample 4: Python 6,934 → correct 1,776, matching
+MATLAB).  Covered by `TestReflectiveGamut`.
 
-**Verification (must all pass):**
-- `SyntheticGamut.srgb().volume()` remains ~830,807
-- BT.2020 volume > sRGB
-- Intersection commutativity: A∩B == B∩A
-- Self-intersection: A∩A == A
-- Full test suite passes
+### Fix 2 — Variable-length cylindrical map
 
-Update `CLAUDE.md` with new cylmap format, outside-in convention, and rationale.
+**Storage format** (cached on `Gamut` as `_cylmap_counts`, `_cylmap_chroma`,
+`_cylmap_offsets`):
+```
+counts:  uint8   (l_steps, h_steps)      # parity-filtered count per cell
+chroma:  float32 [sum(counts)]           # distances, outside-in per cell, row-major
+offsets: int32   [l_steps × h_steps]     # prefix-sum for O(1) cell access
+```
+Sign implicit: even position within cell = outward (+1), odd = inward (−1).
+This is the same binary layout as the UI transfer format above.
+
+**Computation format** (unpacked on demand by `get_cylindrical_map()`):
+```
+cylmap:  float64  (l_steps, h_steps, max_k, 2)   # [sign, distance], max_k = counts.max()
+counts:  int64    (l_steps, h_steps)
+```
+`max_k` is data-driven; all existing vectorised NumPy operations are unchanged.
+Unpack is O(sum(counts)), < 1 ms.
+
+**No fixed intersection limit.**  `_process_hue_loop_nb` working buffer is
+`h_steps × n_tri` (absolute pre-filter maximum).  `_intersect_all_cells_nb`
+output depth is `max_k_a + max_k_b` (tight post-filter upper bound).
+
+**Parity invariant check** (`_check_cylmap_parity`): all 360 counts in each
+L* slice must share the same parity — they originate from the same point,
+which is either inside or outside the gamut.  `RuntimeError` on violation.
 
 ---
 

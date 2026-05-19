@@ -59,15 +59,29 @@ def about_command() -> None:
     for title, subtitle in _STANDARDS:
         console.print(f"  \u2022 {title}")
         console.print(f"    {subtitle}")
-    console.print(
-        "  [dim][Final publication numbers subject to IEC TC110 ballot][/dim]\n"
-    )
 
-    console.print("[bold]Citation:[/bold]")
+    console.print("[bold]Citations:[/bold]")
     console.print(
-        "  Smith, E., et al. (2020). \u201cGamut volume calculation for display\n"
-        "  colour characterisation.\u201d "
-        "Journal of the Society for Information Display.\n"
+        "  Gamut volume calculation:\n"
+        "  E. Smith, R. L. Heckaman, K. Lang, J. Penczek, J. Bergquist (2020).\n"
+        "  \u201cMeasuring the color capability of modern display systems.\u201d\n"
+        "  Journal of the Society for Information Display, 28(6), 548\u2013556.\n"
+        "  https://doi.org/10.1002/jsid.918\n"
+    )
+    console.print(
+        "  Gamut rings concept:\n"
+        "  K. Masaoka, F. Jiang, M. D. Fairchild, R. L. Heckaman (2020).\n"
+        "  \u201cAnalysis of color volume of multi-chromatic displays using gamut rings.\u201d\n"
+        "  Journal of the Society for Information Display, 28(3), 273\u2013286.\n"
+        "  https://doi.org/10.1002/jsid.852\n"
+    )
+    console.print(
+        "  Gamut ring intersection:\n"
+        "  K. Masaoka, E. Smith, K. Lang, B. Berkeley, J. Bergquist, J. Penczek (2025).\n"
+        "  \u201cVisualization of reproducible object colors in standard color spaces\n"
+        "  using the gamut ring intersection.\u201d\n"
+        "  Journal of the Society for Information Display, 33(4), 231\u2013245.\n"
+        "  https://doi.org/10.1002/jsid.2031\n"
     )
 
     console.print("[bold]Algorithm:[/bold]")
