@@ -20,11 +20,11 @@ if TYPE_CHECKING:
     from cielab_gamut_tools.gamut import Gamut
 
 # Maximum number of intersections stored per (L*, hue) cell after parity
-# filtering.  Most cells yield 0 (below the gamut's black level) or 1 (the
-# ray origin on the L* axis is inside the gamut and exits the surface once).
-# Occasionally 2 (origin outside the gamut — enters then exits).  4 is a
-# conservative upper bound that covers all observed edge cases.
-_MAX_K: int = 4
+# filtering.  Convex gamuts yield 1–2 entries.  Non-convex gamuts (print,
+# reflective e-paper) can produce up to 8 real intersections.  16 is a
+# safe upper bound; the working buffer inside the JIT is sized to n_tri
+# so it never truncates before the parity filter runs.
+_MAX_K: int = 16
 
 
 @numba.njit(cache=True)
@@ -48,14 +48,14 @@ def _process_hue_loop_nb(
         valid: Boolean hit mask, shape (n_tri, h_steps).
 
     Returns:
-        result: Dense array shape (h_steps, 4, 2).
+        result: Dense array shape (h_steps, _MAX_K, 2).
                 result[q, j] = [sign, distance] for j-th intersection at hue q.
         counts: Number of valid intersections per hue, shape (h_steps,), int64.
     """
     n_tri = all_t.shape[0]
     h_steps = all_t.shape[1]
 
-    result = np.zeros((h_steps, 4, 2))
+    result = np.zeros((h_steps, 16, 2))  # 16 == _MAX_K; must match
     counts = np.zeros(h_steps, dtype=np.int64)
 
     # Pre-allocate temp buffers (max possible size is n_tri per hue)
@@ -104,7 +104,7 @@ def _process_hue_loop_nb(
         n_kept = 0
         for i in range(k):
             if cs_right[i] * 2.0 - temp_s[i] == 1.0:
-                if n_kept < 4:
+                if n_kept < 16:
                     result[q, n_kept, 0] = temp_s[i]
                     result[q, n_kept, 1] = temp_d[i]
                     n_kept += 1

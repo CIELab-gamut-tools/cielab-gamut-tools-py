@@ -409,3 +409,43 @@ class TestGamutFromCgatsLab:
         assert g.xyz is None  # envelope file has no XYZ
         # Volume should be within 1% of the MATLAB reference
         assert g.volume() == pytest.approx(830732, rel=0.01)
+
+
+class TestReflectiveGamut:
+    """Tests for reflective display measurement files (e.g. e-paper)."""
+
+    @pytest.mark.skipif(
+        not (SAMPLES_DIR / "Sample 4.txt").exists(),
+        reason="Sample 4 test file not available",
+    )
+    def test_sample4_uses_reflector_white_point(self):
+        """Reflective CGATS files must use ILLUMINATION_PERFECT_DIFFUSE_REFLECTOR_XYZ
+        as the white point, not the XYZ row at RGB=(255,255,255).
+
+        Sample 4 is an E Ink reflective display.  The display white at
+        RGB=(255,255,255) has Y≈24, whereas the perfect diffuse reflector has
+        Y=100.  Using the wrong white point inflates all L* values by ~2× and
+        the volume by ~4×.
+
+        MATLAB reference volume: 1776.  Without the fix Python returns ≈6934.
+        """
+        gamut = Gamut.from_cgats(SAMPLES_DIR / "Sample 4.txt")
+        # MATLAB reference: 1776. Allow 5% tolerance.
+        assert gamut.volume() == pytest.approx(1776, rel=0.05)
+
+    @pytest.mark.skipif(
+        not (SAMPLES_DIR / "Sample 4.txt").exists(),
+        reason="Sample 4 test file not available",
+    )
+    def test_sample4_lab_range(self):
+        """With correct white point, L* should span roughly 28–56 (MATLAB range).
+
+        Without the fix the gamut spans ~50–100 because the white point is
+        4× too dark.
+        """
+        gamut = Gamut.from_cgats(SAMPLES_DIR / "Sample 4.txt")
+        l_vals = gamut.lab[:, 0]
+        # White point correctly normalised → L* stays well below 80
+        assert l_vals.max() < 80.0
+        # Gamut is not collapsed to zero
+        assert l_vals.max() - l_vals.min() > 10.0

@@ -189,6 +189,19 @@ class Gamut:
             )
         white_xyz = white_rows[0]  # XYZn
 
+        # Reflective measurements: ILLUMINATION_PERFECT_DIFFUSE_REFLECTOR_XYZ
+        # is the correct white point (paper/diffuse white), not the display's
+        # maximum RGB patch.  Matches MATLAB make_gamut_envelope.m §IDMS v1.3.
+        if metadata and "ILLUMINATION_PERFECT_DIFFUSE_REFLECTOR_XYZ" in metadata:
+            try:
+                vals = [float(v) for v in str(
+                    metadata["ILLUMINATION_PERFECT_DIFFUSE_REFLECTOR_XYZ"]
+                ).split()]
+                if len(vals) == 3:
+                    white_xyz = np.array(vals)
+            except ValueError:
+                pass
+
         # Scale the D50 reference white to the same luminance as the measured
         # white.  Matches MATLAB: D50 = [0.9642, 1, 0.8249] * XYZn(2)
         # For normalised synthetic data XYZn(2)==1, so this is a no-op there.
