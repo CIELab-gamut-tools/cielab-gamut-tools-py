@@ -85,25 +85,38 @@ which is either inside or outside the gamut.  `RuntimeError` on violation.
 
 ---
 
-## Stage 1 — Python server foundation
+## Stage 1 — Python server foundation ✓ COMPLETE
 
-- Add `fastapi` and `uvicorn` to dependencies in `pyproject.toml`
-- `cgt ui` CLI command: starts uvicorn on `localhost:8000` (blocking), opens browser
-- FastAPI app at `src/cielab_gamut_tools/ui/server.py`
-- In-memory gamut registry, pre-populated on startup with 5 standard references:
-  `srgb`, `bt.2020`, `dci-p3`, `display-p3`, `adobe-rgb`
+FastAPI server at `src/cielab_gamut_tools/ui/server.py`, `cgt ui` CLI command,
+and full test coverage in `tests/test_ui_server.py`. All tests pass.
+
+### Implementation notes
+
+- `fastapi>=0.100`, `uvicorn[standard]>=0.22`, `python-multipart>=0.0.7` added
+  to core dependencies in `pyproject.toml`.
+- In-memory `_registry: dict[str, GamutEntry]`; 5 standard `SyntheticGamut`
+  references pre-built in `lifespan()` (geometries only — no cylmaps on startup).
+- Standard gamuts are `protected=True`; `DELETE` returns 403.
+- `volume` field in list response is `null` until first `/volume` request;
+  cached on the `Gamut` object thereafter and appears in subsequent list calls.
+- Binary cylmap wire format exactly matches the planned spec (uint32 header +
+  uint8 counts + 4-byte-aligned padding + float32 chroma). For the standard
+  100×360 grid the padding is always 0 bytes (36008 is divisible by 4).
+- `GET /api/gamuts/:id/cylmap` imports `get_cylindrical_map` at module level,
+  so Numba JIT warm-up runs at server start (not first request).
+- SPA fallback: if `ui/dist/` exists, `/assets/*` served as static files and
+  all other non-API GETs return `index.html`. If `dist/` is absent, `GET /`
+  returns a 404 JSON with build instructions.
 - Endpoints:
-  - `GET  /api/gamuts` → `[{id, name, source, volume, colour}]`
+  - `GET  /api/gamuts` → `[{id, name, source, volume, colour, protected}]`
   - `POST /api/gamuts/upload` — multipart CGATS file upload
-  - `POST /api/gamuts/synthetic` — `{primaries_xy, white_xy, gamma}`
+  - `POST /api/gamuts/synthetic` — `{primaries_xy, white_xy, gamma, name?}`
   - `DELETE /api/gamuts/:id`
   - `GET  /api/gamuts/:id/cylmap` → binary (format above)
   - `GET  /api/gamuts/:id/surface` → JSON `{vertices: [[L,a,b]×726], faces: [[i,j,k]×~1400]}`
   - `GET  /api/gamuts/:id/volume` → JSON `{volume: float}`
   - `POST /api/gamuts/coverage` — `{dut_id, reference_id}` → `{coverage, intersection_volume}`
-  - `POST /api/gamuts/matrix` — `{ids: [...]}` → `{matrix: [[float]]}`
-- Static file serving of `ui/dist/`, SPA fallback to `index.html`
-- Fully testable with curl before any frontend exists
+  - `POST /api/gamuts/matrix` — `{ids: [...]}` → `{matrix: [[float]]}` (symmetric, diagonal=100)
 
 ---
 

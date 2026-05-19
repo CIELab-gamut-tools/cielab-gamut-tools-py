@@ -5,6 +5,7 @@ import typer
 from cielab_gamut_tools import __version__
 from cielab_gamut_tools.cli.commands import calculate, generate, plot
 from cielab_gamut_tools.cli.commands.about import about_command
+from cielab_gamut_tools.cli.commands.ui import ui_command
 
 app = typer.Typer(
     name="cielab-tools",
@@ -17,6 +18,7 @@ app.add_typer(plot.app, name="plot")
 app.add_typer(generate.app, name="generate")
 
 app.command(name="about")(about_command)
+app.command(name="ui")(ui_command)
 
 
 def _version_callback(value: bool) -> None:
