@@ -95,3 +95,6 @@ tmp/
 
 # MkDocs build output
 site/
+
+# JS
+**/node_modules
