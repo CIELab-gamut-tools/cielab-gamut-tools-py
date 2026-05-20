@@ -1,102 +1,135 @@
 <template>
   <div class="rings-view">
-    <!-- Content area — measured by ResizeObserver -->
-    <div class="rings-view__content" ref="contentEl">
+    <div class="rings-view__content">
       <div v-if="!selection.dutId" class="rings-view__empty">
         Select a DUT gamut (D) to display rings
       </div>
-      <div v-else-if="loading" class="rings-view__empty">
-        <i class="pi pi-spin pi-spinner" /> Loading cylmap…
+      <div v-else-if="!imageUrl && rendering" class="rings-view__empty">
+        <i class="pi pi-spin pi-spinner" /> Rendering…
       </div>
       <div v-else-if="error" class="rings-view__empty rings-view__error">
         <i class="pi pi-exclamation-triangle" /> {{ error }}
       </div>
-      <!-- Canvas is only rendered once squareSize is known -->
-      <RingsCanvas
-        v-else-if="squareSize > 0"
-        :gamut="dutGamut"
-        :ref-gamut="refGamut"
-        :style="{ width: `${squareSize}px`, height: `${squareSize}px`, flexShrink: 0 }"
-        @volume="onVolume"
-      />
-    </div>
-
-    <!-- Info bar always visible below the content area -->
-    <div class="rings-view__info">
-      <span v-if="displayedVolume !== null">
-        CGV: {{ Math.round(displayedVolume).toLocaleString() }}
-      </span>
-      <span v-if="refGamut && refName" class="rings-view__ref-label">
-        vs {{ refName }}
-      </span>
+      <template v-else-if="imageUrl">
+        <!-- Spinner overlay on top of stale image while re-rendering -->
+        <div v-if="rendering" class="rings-view__spinner-overlay">
+          <i class="pi pi-spin pi-spinner" />
+        </div>
+        <img class="rings-view__img"
+             :src="imageUrl"
+             alt="Gamut rings plot"
+             draggable="false" />
+      </template>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, watch, onMounted, onUnmounted } from 'vue'
+import { ref, watch, onUnmounted } from 'vue'
 import { useSelectionStore } from '../stores/selectionStore.js'
-import { useGamutStore } from '../stores/gamutStore.js'
-import { unpackCylmap } from '../gamut/cylmap.js'
-import RingsCanvas from './RingsCanvas.vue'
+import { useUiStore } from '../stores/uiStore.js'
+import { renderRings } from '../api.js'
 
 const selection = useSelectionStore()
-const gamuts = useGamutStore()
+const ui = useUiStore()
 
-const contentEl = ref(null)
-const squareSize = ref(0)
-
-const loading = ref(false)
+const imageUrl = ref(null)
+const rendering = ref(false)
 const error = ref(null)
-const dutGamut = ref(null)
-const refGamut = ref(null)
-const refName = ref(null)
-const displayedVolume = ref(null)
 
-// Measure the content area and keep the canvas square within it
-let ro = null
-onMounted(() => {
-  ro = new ResizeObserver(([entry]) => {
-    const { width, height } = entry.contentRect
-    squareSize.value = Math.max(0, Math.floor(Math.min(width, height)))
-  })
-  ro.observe(contentEl.value)
-})
-onUnmounted(() => ro?.disconnect())
+let prevUrl = null
+let renderToken = 0
+let debounceTimer = null
 
-function onVolume(v) {
-  displayedVolume.value = v
+function buildOptions() {
+  const o = ui.ringsOptions
+  return {
+    dut_id: selection.dutId,
+    reference_ids: [...selection.referenceIds],
+    scale: o.scale || null,
+    intersection: o.intersection && selection.referenceIds.length > 0,
+    l_rings: o.lRings,
+    show_bands: o.showBands,
+    band_chroma: o.bandChroma,
+    band_ls: o.bandLs,
+    primaries: o.primaries,
+    ref_primaries: o.refPrimaries,
+    primary_color: o.primaryColor,
+    primary_origin: o.primaryOrigin,
+    show_cent_mark: o.showCentMark,
+    l_labels: o.lLabels,
+    l_label_color: o.lLabelColor,
+    chroma_rings: o.chromaRings,
+    dut_label: o.dutLabel,
+    ref_label: o.refLabel,
+    title: o.autoTitle ? 'auto' : (o.customTitle || null),
+    dpi: o.dpi,
+    format: 'png',
+  }
+}
+
+function scheduleRender() {
+  clearTimeout(debounceTimer)
+  debounceTimer = setTimeout(doRender, 400)
+}
+
+async function doRender() {
+  if (!selection.dutId) {
+    imageUrl.value = null
+    error.value = null
+    return
+  }
+  const token = ++renderToken
+  rendering.value = true
+  error.value = null
+  try {
+    const blob = await renderRings(buildOptions())
+    if (token !== renderToken) return
+    if (prevUrl) { URL.revokeObjectURL(prevUrl); prevUrl = null }
+    prevUrl = URL.createObjectURL(blob)
+    imageUrl.value = prevUrl
+  } catch (e) {
+    if (token !== renderToken) return
+    error.value = e.message
+  } finally {
+    if (token === renderToken) rendering.value = false
+  }
 }
 
 watch(
-  [() => selection.dutId, () => selection.referenceIds[0]],
-  async ([dutId, refId]) => {
-    dutGamut.value = null
-    refGamut.value = null
-    refName.value = null
-    displayedVolume.value = null
-    error.value = null
-
-    if (!dutId) return
-
-    loading.value = true
-    try {
-      const rawDut = await gamuts.ensureCylmap(dutId)
-      dutGamut.value = unpackCylmap(rawDut)
-
-      if (refId) {
-        const rawRef = await gamuts.ensureCylmap(refId)
-        refGamut.value = unpackCylmap(rawRef)
-        refName.value = gamuts.gamuts[refId]?.label ?? null
-      }
-    } catch (e) {
-      error.value = e.message
-    } finally {
-      loading.value = false
-    }
-  },
+  [
+    () => selection.dutId,
+    () => selection.referenceIds.length,
+    () => selection.referenceIds.join(','),
+    () => ui.ringsOptions.scale,
+    () => ui.ringsOptions.intersection,
+    () => ui.ringsOptions.lRings,
+    () => ui.ringsOptions.showBands,
+    () => ui.ringsOptions.bandChroma,
+    () => ui.ringsOptions.bandLs,
+    () => ui.ringsOptions.primaries,
+    () => ui.ringsOptions.refPrimaries,
+    () => ui.ringsOptions.primaryColor,
+    () => ui.ringsOptions.primaryOrigin,
+    () => ui.ringsOptions.showCentMark,
+    () => ui.ringsOptions.lLabels,
+    () => ui.ringsOptions.lLabelColor,
+    () => ui.ringsOptions.chromaRings,
+    () => ui.ringsOptions.dutLabel,
+    () => ui.ringsOptions.refLabel,
+    () => ui.ringsOptions.autoTitle,
+    () => ui.ringsOptions.customTitle,
+    () => ui.ringsOptions.dpi,
+    () => ui.ringsRenderCounter,
+  ],
+  scheduleRender,
   { immediate: true },
 )
+
+onUnmounted(() => {
+  clearTimeout(debounceTimer)
+  if (prevUrl) URL.revokeObjectURL(prevUrl)
+})
 </script>
 
 <style scoped>
@@ -106,17 +139,33 @@ watch(
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  padding: 0.5rem;
-  gap: 0.25rem;
 }
 
 .rings-view__content {
   flex: 1;
   min-height: 0;
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
+  padding: 0.5rem;
+}
+
+.rings-view__img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.rings-view__spinner-overlay {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.75rem;
+  font-size: 0.875rem;
+  color: var(--p-primary-500);
+  opacity: 0.8;
 }
 
 .rings-view__empty {
@@ -129,19 +178,5 @@ watch(
 
 .rings-view__error {
   color: var(--p-red-500);
-}
-
-.rings-view__info {
-  flex-shrink: 0;
-  display: flex;
-  gap: 1rem;
-  justify-content: center;
-  font-size: 0.8rem;
-  color: var(--p-text-muted-color);
-  min-height: 1.2rem;
-}
-
-.rings-view__ref-label {
-  font-style: italic;
 }
 </style>

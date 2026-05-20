@@ -7,18 +7,22 @@
       </button>
     </div>
 
-    <div v-if="loading" class="gamut-sidebar__status">
-      <i class="pi pi-spin pi-spinner" /> Loading…
+    <div class="gamut-sidebar__list-area">
+      <div v-if="loading" class="gamut-sidebar__status">
+        <i class="pi pi-spin pi-spinner" /> Loading…
+      </div>
+      <div v-else-if="fetchError" class="gamut-sidebar__status gamut-sidebar__status--error">
+        <i class="pi pi-exclamation-triangle" /> {{ fetchError }}
+      </div>
+      <div v-else-if="gamuts.list.length === 0" class="gamut-sidebar__status">
+        No gamuts loaded
+      </div>
+      <div v-else class="gamut-sidebar__list">
+        <GamutItem v-for="g in gamuts.list" :key="g.id" :gamut="g" />
+      </div>
     </div>
-    <div v-else-if="fetchError" class="gamut-sidebar__status gamut-sidebar__status--error">
-      <i class="pi pi-exclamation-triangle" /> {{ fetchError }}
-    </div>
-    <div v-else-if="gamuts.list.length === 0" class="gamut-sidebar__status">
-      No gamuts loaded
-    </div>
-    <div v-else class="gamut-sidebar__list">
-      <GamutItem v-for="g in gamuts.list" :key="g.id" :gamut="g" />
-    </div>
+
+    <RingsPropertiesPanel />
   </aside>
 
   <AddGamutModal v-model="showAdd" />
@@ -29,6 +33,7 @@ import { ref, onMounted } from 'vue'
 import { useGamutStore } from '../stores/gamutStore.js'
 import GamutItem from './GamutItem.vue'
 import AddGamutModal from './AddGamutModal.vue'
+import RingsPropertiesPanel from './RingsPropertiesPanel.vue'
 
 const gamuts = useGamutStore()
 const loading = ref(false)
@@ -56,7 +61,7 @@ onMounted(async () => {
   flex-direction: column;
   border-right: 1px solid var(--p-surface-200);
   background: var(--p-surface-50);
-  overflow-y: auto;
+  overflow: hidden;
 }
 
 .gamut-sidebar__header {
@@ -95,24 +100,28 @@ onMounted(async () => {
   color: var(--p-primary-500);
 }
 
-.gamut-sidebar__list {
+.gamut-sidebar__list-area {
   flex: 1;
   overflow-y: auto;
+  min-height: 0;
+}
+
+.gamut-sidebar__list {
+  /* GamutItems stack naturally */
 }
 
 .gamut-sidebar__status {
-  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
+  padding: 1rem;
   color: var(--p-text-muted-color);
   font-size: 0.875rem;
 }
 
 .gamut-sidebar__status--error {
   color: var(--p-red-500);
-  padding: 1rem;
   text-align: center;
 }
 </style>

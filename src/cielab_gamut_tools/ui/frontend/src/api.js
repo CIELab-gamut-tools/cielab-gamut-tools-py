@@ -53,6 +53,11 @@ export async function getMatrix(ids) {
   return (await req('POST', '/gamuts/matrix', { ids })).json()
 }
 
+export async function renderRings(options) {
+  const res = await req('POST', '/render/rings', options)
+  return res.blob()
+}
+
 /**
  * Fetch and decode the binary cylmap for a gamut.
  *

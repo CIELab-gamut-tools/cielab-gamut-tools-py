@@ -3,8 +3,9 @@
 ## Architecture Summary
 
 - **Python server** (FastAPI + uvicorn): file I/O, cylindrical map computation, downloadable export via matplotlib. Started by `cgt ui`, blocks the terminal (Ctrl-C to stop), opens browser automatically. Serves Vite `dist/` as static files.
-- **JS client** (Vite + Vue 3 + PrimeVue Aura + Pinia): rendering, interactive compute. WebGL rings renderer (ported from `gamut-rings-app`), TresJS surface renderer.
-- **Synthetic gamuts during interactive dragging**: computed client-side in JS (zero latency). When saved to session or exported, reconstructed server-side in Python.
+- **JS client** (Vite + Vue 3 + PrimeVue Aura + Pinia): rendering, interactive compute. WebGL rings renderer used only in the synthetic gamut builder (live preview while dragging primaries). TresJS surface renderer for the main surface view.
+- **Rings view**: server-rendered PNG via matplotlib, displayed in an `<img>` tag with CSS zoom. Round-trip ~200–400 ms; acceptable for a semi-static standards-compliant plot. Scale options are constrained by standard: emissive ±1250 C*, reflective 150/300/600.
+- **Synthetic gamuts during interactive dragging**: computed and rendered client-side in JS (zero latency). When saved to session, reconstructed server-side in Python for official rendering.
 - **Downloadable output**: always via Python matplotlib — identical to CLI output.
 
 ### Cylmap transfer format
@@ -117,48 +118,62 @@ and full test coverage in `tests/test_ui_server.py`. All tests pass.
   - `GET  /api/gamuts/:id/volume` → JSON `{volume: float}`
   - `POST /api/gamuts/coverage` — `{dut_id, reference_id}` → `{coverage, intersection_volume}`
   - `POST /api/gamuts/matrix` — `{ids: [...]}` → `{matrix: [[float]]}` (symmetric, diagonal=100)
+  - `POST /api/render/rings` — options body → PNG bytes (same path used for both display and export)
 
 ---
 
-## Stage 2 — Frontend scaffold
+## Stage 2 — Frontend scaffold ✓ COMPLETE
 
-- Vite + Vue 3 + PrimeVue (Aura theme) + Pinia + TresJS project under `ui/frontend/`
-- `vite.config.js`: proxy `/api` → `localhost:8000`
-- Pinia stores:
-  - `gamutStore`: `{id, name, label, source, volume, colour, cylmap: ArrayBuffer, offsets: Uint32Array, surfaceMesh}`
-  - `selectionStore`: `{dutId, referenceIds[]}`
+- Vite + Vue 3 + PrimeVue (Aura theme) + Pinia + TresJS (`@tresjs/core`, `three`) in
+  `package.json`; `pinia-plugin-persistedstate` for localStorage persistence
+- `vite.config.js`: proxy `/api` → `localhost:8000`; `build.outDir` → `../dist`
+- `npm run dev` launches both the Python API server and Vite together via `concurrently`
+- Pinia stores (all in `src/stores/`):
+  - `gamutStore`: `{id, name, label, source, volume, colour, protected, cylmap, surface}`;
+    `cylmap` stored as decoded `{lSteps, hSteps, counts, chroma, offsets}` typed arrays (not
+    raw `ArrayBuffer`); lazy `ensureCylmap()`, `ensureSurface()`, `ensureVolume()` actions
+  - `selectionStore`: `{dutId, referenceIds[]}`; `setDut`, `toggleReference`, `removeGamut`
   - `uiStore`: `{activeView, exportOptions}` — persisted to localStorage
-- API client (`api.js`): typed `fetch` wrappers; binary cylmap response unpacked to counts +
-  chroma typed arrays + prefix-sum offset table
-- Shell layout: `AppHeader`, `GamutSidebar` (empty list), `MainPanel` with
-  `[Rings | Surface | Analysis]` tab switcher
-- No real functionality yet — skeleton renders without errors, tabs switch
+- `api.js`: typed `fetch` wrappers for all Stage 1 endpoints; `getCylmap()` decodes the binary
+  wire format and builds the prefix-sum offset table client-side
+- Shell layout: `AppHeader`, `GamutSidebar`, `MainPanel` with `[Rings | Surface | Analysis]`
+  tab switcher; active tab persisted via `uiStore`
 
 ---
 
-## Stage 3 — Gamut management
+## Stage 3 — Gamut management (partially done)
 
-- `GamutItem`: colour swatch, editable label, volume badge, DUT/ref toggle (radio for DUT,
-  checkbox for ref), remove button
-- Sidebar populated from `gamutStore` on mount — standard references present immediately
-- `AddGamutModal` with two tabs:
-  - **File tab**: drag-and-drop zone + native file picker, `POST /api/gamuts/upload`
-  - **Synthetic tab**: port `ChromaticityEditor` and primaries/white/gamma inputs from
-    `gamut-rings-app`, `POST /api/gamuts/synthetic`
-- Colour assignment: small fixed palette, assigned round-robin on add
-- Selection logic enforced in `selectionStore`: exactly one DUT, any number of references
+### Done
+- `GamutItem`: colour swatch, editable label, volume badge, DUT/ref toggle, remove button ✓
+- `GamutSidebar`: populated from `gamutStore` on mount; standard references present
+  immediately; loading/error states ✓
+- `AddGamutModal` **file tab**: drag-and-drop zone + native file picker,
+  `POST /api/gamuts/upload`, error display ✓
+- Colour assignment: fixed palette on the server, assigned round-robin ✓
+- Selection logic in `selectionStore` ✓
+
+### Still needed
+- `AddGamutModal` **synthetic tab**: primaries/white/gamma inputs (port `ChromaticityEditor`
+  from `gamut-rings-app`), `POST /api/gamuts/synthetic`; WebGL rings preview inside this tab
+  for zero-latency live feedback while editing
 
 ---
 
-## Stage 4 — Rings view
+## Stage 4 — Rings view ✓ COMPLETE
 
-- Port `GamutRingsCanvas` WebGL component from `gamut-rings-app`, rewired to read cylmap
-  from `gamutStore`
-- Client-side rings computation from cylmap typed arrays (outside-in convention throughout)
-- Client-side intersection via `intersect.js` logic (two cylmaps → intersection cylmap → render)
-- `RingsView`: reacts to `selectionStore` changes, fetches cylmaps on first use (cached in
-  store), triggers re-render
-- `RingsOptions` panel: L\* label set, plot title, legend toggle
+- `POST /api/render/rings` server endpoint and `renderRings()` JS wrapper in `api.js` ✓
+- `RingsView` rewritten: fetches server PNG, displays in `<img>` tag; CSS width-based zoom
+  (100% × zoom factor, container scrolls on overflow); debounced re-render (400ms) on any
+  selection or options change; race-condition safe via render token ✓
+- Zoom toolbar: − / % / + / reset buttons; zoom state persisted in `uiStore` ✓
+- `RingsPropertiesPanel`: collapsible panel at bottom of sidebar (always visible, independent
+  of list scroll); scale select (Auto / Emissive ±1250 / Reflective 150/300/600), intersection
+  toggle (disabled when no reference), auto-title toggle + custom title input, Render button ✓
+- `uiStore` extended: `ringsOptions {scale, autoTitle, customTitle, intersection}`, `ringsZoom`,
+  `ringsRenderCounter` / `forceRender()` action; all persisted to localStorage ✓
+- `GamutSidebar` restructured: list area is `flex:1 overflow-y:auto`, panel is `flex-shrink:0`
+  so it always sticks below the list without requiring scroll ✓
+- `RingsCanvas` (WebGL) kept intact for future use in the synthetic gamut builder tab ✓
 
 ---
 
@@ -183,11 +198,14 @@ and full test coverage in `tests/test_ui_server.py`. All tests pass.
 
 ## Stage 7 — Downloadable export
 
-- Server endpoints: `POST /api/export/rings`, `POST /api/export/surface`
-  — call existing matplotlib render path with options matching CLI flags, return PNG or PDF bytes
-- `ExportPanel`: format picker (PNG/PDF), DPI, title/legend options mirroring CLI
-- Triggered from `AppHeader` export button; active view determines which endpoint is called
-- Downloaded via blob URL — output is identical to `cgt plot rings` / `cgt plot surface`
+- Rings export reuses `POST /api/render/rings` — adding `"format": "pdf"` and a higher `"dpi"`
+  triggers `Content-Disposition: attachment`; no separate endpoint needed. Output is identical
+  to `cgt plot rings`.
+- Surface export: `POST /api/export/surface` — calls matplotlib 3D render path, returns PNG or
+  PDF bytes. Output is identical to `cgt plot surface`.
+- `ExportPanel`: format picker (PNG/PDF), DPI spinner; for rings, options are already set in
+  `RingsPropertiesPanel` — export button in `AppHeader` just re-posts with download flag.
+- Downloaded via blob URL.
 
 ---
 

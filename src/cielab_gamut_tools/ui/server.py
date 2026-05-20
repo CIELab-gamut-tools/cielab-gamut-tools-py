@@ -8,6 +8,7 @@ on the Gamut object).
 
 from __future__ import annotations
 
+import io
 import os
 import struct
 import tempfile
@@ -16,10 +17,14 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
+import matplotlib
 import numpy as np
 from fastapi import FastAPI, HTTPException, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel
+
+# Must be set before any pyplot import; server always renders off-screen.
+matplotlib.use("Agg")
 
 from cielab_gamut_tools.gamut import Gamut
 
@@ -327,6 +332,170 @@ def compute_matrix(req: MatrixRequest) -> dict:  # type: ignore[type-arg]
             )
 
     return {"matrix": matrix}
+
+
+# ---------------------------------------------------------------------------
+# Render rings plot  →  PNG or PDF bytes
+# ---------------------------------------------------------------------------
+
+_SCALE_LIMITS: dict[str | int, tuple[float, float]] = {
+    "emissive": (-1250.0, 1250.0),
+    150: (-150.0, 150.0),  300: (-300.0, 300.0),  600: (-600.0, 600.0),
+    "150": (-150.0, 150.0), "300": (-300.0, 300.0), "600": (-600.0, 600.0),
+}
+
+
+def _parse_floats(s: str) -> list[float]:
+    return [float(x) for x in s.split(",") if x.strip()]
+
+
+def _parse_band_ls(s: str) -> float | tuple[float, float] | list[float]:
+    parts = _parse_floats(s)
+    if not parts:
+        return (20.0, 90.0)
+    if len(parts) == 1:
+        return parts[0]
+    if len(parts) == 2:
+        return (parts[0], parts[1])
+    return parts
+
+
+def _resolve_l_label_indices(
+    l_labels: str, effective_l_rings: list[float]
+) -> list[int] | None:
+    """Convert L* label values (e.g. '10,50') to 0-based indices into [*l_rings, 100].
+    Returns None to keep plot_rings default, [] to suppress all labels."""
+    stripped = l_labels.strip()
+    if not stripped:
+        return None  # plot_rings default [0, 4]
+    if stripped.lower() == "none":
+        return []
+    vals = _parse_floats(stripped)
+    all_l = effective_l_rings + [100.0]
+    result = []
+    for lv in vals:
+        diffs = [abs(al - lv) for al in all_l]
+        best_i = min(range(len(diffs)), key=lambda i: diffs[i])
+        if diffs[best_i] < 1.0:
+            result.append(best_i)
+    return result or None
+
+
+class RingsRenderRequest(BaseModel):
+    dut_id: str
+    reference_ids: list[str] = []
+    # Axis scale (convenience mapping to xlim/ylim)
+    scale: str | int | None = None    # "emissive" | 150 | 300 | 600 | None (auto)
+    # Reference options
+    intersection: bool = False
+    # Ring levels
+    l_rings: str = ""                 # "" = default [10,20,...,90]; "20,40,60,80" = custom
+    # Colour bands
+    show_bands: bool = True
+    band_chroma: float = 50.0
+    band_ls: str = "20,90"           # single value or "LO,HI"
+    # Primary indicators
+    primaries: str = "rgb"            # "none" | "rgb" | "all"
+    ref_primaries: str = "none"
+    primary_color: str = "output"     # "input" | "output"
+    primary_origin: str = "centre"    # "centre" | "ring"
+    show_cent_mark: bool = True
+    # L* ring labels
+    l_labels: str = "10,50"          # "none" | comma-separated L* values
+    l_label_color: str = ""          # "" = default (outer black, inner white)
+    # Constant-chroma reference circles
+    chroma_rings: str = ""            # "" | "50,100,150"
+    # Labels used in auto-title assembly
+    dut_label: str = ""              # "" = auto (gamut title or name)
+    ref_label: str = ""
+    # Title
+    title: str | None = "auto"       # "auto" | None (suppress) | custom string
+    # Figure
+    figsize: str = "8,8"
+    dpi: int = 150
+    format: str = "png"              # "png" | "pdf"
+    download: bool = False
+
+
+@app.post("/api/render/rings")
+def render_rings(req: RingsRenderRequest) -> Response:
+    dut = _registry.get(req.dut_id)
+    if dut is None:
+        raise HTTPException(status_code=404, detail=f"DUT gamut {req.dut_id!r} not found")
+
+    refs: list[Gamut] = []
+    for rid in req.reference_ids[:2]:
+        ref = _registry.get(rid)
+        if ref is None:
+            raise HTTPException(status_code=404, detail=f"Reference gamut {rid!r} not found")
+        refs.append(ref.gamut)
+
+    lim = _SCALE_LIMITS.get(req.scale) if req.scale is not None else None
+    fmt = req.format.lower() if req.format.lower() in ("png", "pdf") else "png"
+
+    # Parse compound string fields
+    parsed_l_rings: list[float] | None = (
+        _parse_floats(req.l_rings) if req.l_rings.strip() else None
+    )
+    effective_l_rings = parsed_l_rings if parsed_l_rings is not None else list(range(10, 100, 10))
+    parsed_chroma_rings = _parse_floats(req.chroma_rings) if req.chroma_rings.strip() else []
+    parsed_figsize_list = _parse_floats(req.figsize)
+    parsed_figsize = (
+        (parsed_figsize_list[0], parsed_figsize_list[1])
+        if len(parsed_figsize_list) == 2 else (8.0, 8.0)
+    )
+    l_label_indices = _resolve_l_label_indices(req.l_labels, effective_l_rings)
+
+    kwargs: dict = dict(
+        intersection_plot=req.intersection,
+        show_bands=req.show_bands,
+        band_chroma=req.band_chroma,
+        band_ls=_parse_band_ls(req.band_ls),
+        primaries=req.primaries,
+        ref_primaries=req.ref_primaries,
+        primary_color=req.primary_color,
+        primary_origin=req.primary_origin,
+        cent_mark="+k" if req.show_cent_mark else None,
+        chroma_rings=parsed_chroma_rings,
+        figsize=parsed_figsize,
+        title=req.title,
+        xlim=lim,
+        ylim=lim,
+    )
+    if parsed_l_rings is not None:
+        kwargs["l_rings"] = parsed_l_rings
+    if l_label_indices is not None:
+        kwargs["l_label_indices"] = l_label_indices
+    if req.l_label_color.strip():
+        kwargs["l_label_colors"] = req.l_label_color.strip()
+    if req.dut_label.strip():
+        kwargs["dut_label"] = req.dut_label.strip()
+    if req.ref_label.strip():
+        kwargs["ref_label"] = req.ref_label.strip()
+
+    from cielab_gamut_tools.plotting.rings import plot_rings
+    import matplotlib.pyplot as plt
+
+    try:
+        fig, _ = plot_rings(
+            dut.gamut,
+            reference=refs[0] if refs else None,
+            reference2=refs[1] if len(refs) > 1 else None,
+            **kwargs,
+        )
+        buf = io.BytesIO()
+        fig.savefig(buf, format=fmt, dpi=req.dpi, bbox_inches="tight")
+        plt.close(fig)
+        buf.seek(0)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    mime = "application/pdf" if fmt == "pdf" else "image/png"
+    headers: dict[str, str] = {}
+    if req.download:
+        headers["Content-Disposition"] = f'attachment; filename="rings.{fmt}"'
+
+    return Response(content=buf.read(), media_type=mime, headers=headers)
 
 
 # ---------------------------------------------------------------------------

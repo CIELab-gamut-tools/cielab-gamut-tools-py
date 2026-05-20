@@ -250,3 +250,124 @@ def test_matrix_unknown_id(client: TestClient, standard_ids: dict[str, str]) -> 
         json={"ids": [standard_ids["sRGB"], "00000000-0000-0000-0000-000000000000"]},
     )
     assert resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Render rings  (cylmaps already cached from volume/coverage tests above)
+# ---------------------------------------------------------------------------
+
+
+def test_render_rings_basic(client: TestClient, standard_ids: dict[str, str]) -> None:
+    resp = client.post("/api/render/rings", json={"dut_id": standard_ids["sRGB"]})
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "image/png"
+    assert len(resp.content) > 5_000  # non-trivial PNG
+
+
+def test_render_rings_with_reference(client: TestClient, standard_ids: dict[str, str]) -> None:
+    payload = {
+        "dut_id": standard_ids["sRGB"],
+        "reference_ids": [standard_ids["BT.2020"]],
+    }
+    resp = client.post("/api/render/rings", json=payload)
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "image/png"
+
+
+def test_render_rings_with_two_references(
+    client: TestClient, standard_ids: dict[str, str]
+) -> None:
+    payload = {
+        "dut_id": standard_ids["sRGB"],
+        "reference_ids": [standard_ids["BT.2020"], standard_ids["DCI-P3"]],
+    }
+    resp = client.post("/api/render/rings", json=payload)
+    assert resp.status_code == 200
+
+
+def test_render_rings_intersection(client: TestClient, standard_ids: dict[str, str]) -> None:
+    payload = {
+        "dut_id": standard_ids["sRGB"],
+        "reference_ids": [standard_ids["BT.2020"]],
+        "intersection": True,
+    }
+    resp = client.post("/api/render/rings", json=payload)
+    assert resp.status_code == 200
+
+
+def test_render_rings_scale_emissive(client: TestClient, standard_ids: dict[str, str]) -> None:
+    resp = client.post(
+        "/api/render/rings", json={"dut_id": standard_ids["sRGB"], "scale": "emissive"}
+    )
+    assert resp.status_code == 200
+
+
+def test_render_rings_scale_reflective(client: TestClient, standard_ids: dict[str, str]) -> None:
+    for scale in (150, 300, 600):
+        resp = client.post(
+            "/api/render/rings", json={"dut_id": standard_ids["sRGB"], "scale": scale}
+        )
+        assert resp.status_code == 200, f"scale={scale} failed"
+
+
+def test_render_rings_pdf(client: TestClient, standard_ids: dict[str, str]) -> None:
+    resp = client.post(
+        "/api/render/rings",
+        json={"dut_id": standard_ids["sRGB"], "format": "pdf", "dpi": 72},
+    )
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "application/pdf"
+    assert resp.content[:4] == b"%PDF"
+
+
+def test_render_rings_download_flag(client: TestClient, standard_ids: dict[str, str]) -> None:
+    resp = client.post(
+        "/api/render/rings", json={"dut_id": standard_ids["sRGB"], "download": True}
+    )
+    assert resp.status_code == 200
+    cd = resp.headers.get("content-disposition", "")
+    assert "attachment" in cd
+    assert "rings.png" in cd
+
+
+def test_render_rings_download_pdf(client: TestClient, standard_ids: dict[str, str]) -> None:
+    resp = client.post(
+        "/api/render/rings",
+        json={"dut_id": standard_ids["sRGB"], "format": "pdf", "download": True},
+    )
+    assert resp.status_code == 200
+    assert "rings.pdf" in resp.headers.get("content-disposition", "")
+
+
+def test_render_rings_custom_title(client: TestClient, standard_ids: dict[str, str]) -> None:
+    resp = client.post(
+        "/api/render/rings",
+        json={"dut_id": standard_ids["sRGB"], "title": "My Custom Title"},
+    )
+    assert resp.status_code == 200
+
+
+def test_render_rings_no_title(client: TestClient, standard_ids: dict[str, str]) -> None:
+    resp = client.post(
+        "/api/render/rings", json={"dut_id": standard_ids["sRGB"], "title": None}
+    )
+    assert resp.status_code == 200
+
+
+def test_render_rings_dut_not_found(client: TestClient) -> None:
+    resp = client.post(
+        "/api/render/rings",
+        json={"dut_id": "00000000-0000-0000-0000-000000000000"},
+    )
+    assert resp.status_code == 404
+
+
+def test_render_rings_reference_not_found(
+    client: TestClient, standard_ids: dict[str, str]
+) -> None:
+    payload = {
+        "dut_id": standard_ids["sRGB"],
+        "reference_ids": ["00000000-0000-0000-0000-000000000000"],
+    }
+    resp = client.post("/api/render/rings", json=payload)
+    assert resp.status_code == 404
