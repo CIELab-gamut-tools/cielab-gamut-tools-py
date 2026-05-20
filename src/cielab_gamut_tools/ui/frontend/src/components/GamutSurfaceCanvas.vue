@@ -142,6 +142,7 @@ function syncMeshes(gamuts) {
       mat.color.set(g.colour)
       mat.opacity = alpha
       mat.transparent = alpha < 1.0
+      mat.depthWrite = alpha >= 1.0
       mat.needsUpdate = true
       mesh.visible = visible
     } else {
@@ -150,7 +151,8 @@ function syncMeshes(gamuts) {
         color: new THREE.Color(g.colour),
         opacity: alpha,
         transparent: alpha < 1.0,
-        side: THREE.DoubleSide,
+        depthWrite: alpha >= 1.0,
+        side: THREE.FrontSide,
         shininess: 30,
       })
       const mesh = new THREE.Mesh(geo, mat)
@@ -159,6 +161,7 @@ function syncMeshes(gamuts) {
       meshMap.set(g.id, { mesh, geo, mat })
     }
   }
+  updateRenderOrder()
 }
 
 // ── Axis box — static parts (panes + edges) ─────────────────────────────────
@@ -367,6 +370,22 @@ function updateTicks() {
   scene.add(tickGroup)
 }
 
+// Sort transparent gamut meshes so the one with the furthest near-surface is
+// drawn first (back-to-front). Resolves ordering for nested gamuts where both
+// bounding-sphere centres are at the same position — the smaller (inner) gamut
+// has a larger (centre_dist − radius) and must render before the outer shell.
+function updateRenderOrder() {
+  if (!camera || meshMap.size < 2) return
+  const entries = []
+  for (const [, { mesh }] of meshMap) {
+    if (!mesh.geometry.boundingSphere) mesh.geometry.computeBoundingSphere()
+    const dist = camera.position.distanceTo(mesh.geometry.boundingSphere.center)
+    entries.push({ mesh, nearDist: dist - mesh.geometry.boundingSphere.radius })
+  }
+  entries.sort((a, b) => b.nearDist - a.nearDist)   // furthest surface first
+  entries.forEach((e, i) => { e.mesh.renderOrder = i })
+}
+
 // ── Lifecycle ───────────────────────────────────────────────────────────────
 
 onMounted(() => {
@@ -408,8 +427,8 @@ onMounted(() => {
   // Apply initial projection blend (handles persisted non-default values).
   applyPerspectiveBlend(props.perspectiveBlend)
 
-  // Rebuild ticks whenever the camera moves; stateEqual guard makes this cheap.
-  controls.addEventListener('change', updateTicks)
+  // Rebuild ticks and re-sort gamut render order whenever the camera moves.
+  controls.addEventListener('change', () => { updateTicks(); updateRenderOrder() })
 
   ro = new ResizeObserver(entries => {
     const { width, height } = entries[0].contentRect
@@ -465,8 +484,7 @@ watch(
 onUnmounted(() => {
   cancelAnimationFrame(animId)
   ro?.disconnect()
-  controls?.removeEventListener('change', updateTicks)
-  controls?.dispose()
+  controls?.dispose()  // disposes all 'change' listeners
   disposeGroup(axisGroup)
   disposeGroup(tickGroup)
   for (const { geo, mat } of meshMap.values()) { geo.dispose(); mat.dispose() }
