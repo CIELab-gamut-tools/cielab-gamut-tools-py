@@ -123,7 +123,6 @@ onMounted(() => {
 
 onUnmounted(() => {
   if (gl) {
-    // Release WebGL resources
     Object.values(bufs.lines || []).forEach(b => gl.deleteBuffer(b))
     Object.values(bufs.areas || []).forEach(b => gl.deleteBuffer(b))
     gl.deleteBuffer(bufs.rings)
@@ -251,7 +250,7 @@ function renderWithRef({ cssA, cssB }, { cssA: rx, cssB: ry }) {
 .rings-wrap {
   position: relative;
   width: 100%;
-  aspect-ratio: 1;
+  height: 100%;
 }
 
 .rings-svg,

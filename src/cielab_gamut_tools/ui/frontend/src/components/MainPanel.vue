@@ -41,8 +41,29 @@ const activeIndex = computed({
 
 .main-panel__tabs {
   flex: 1;
+  min-height: 0;
+}
+
+/* Thread height through PrimeVue's internal TabView elements */
+:deep(.p-tabview) {
+  flex: 1;
   display: flex;
   flex-direction: column;
+  min-height: 0;
+}
+
+:deep(.p-tabview-panels) {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+:deep(.p-tabview-panel) {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .main-panel__placeholder {

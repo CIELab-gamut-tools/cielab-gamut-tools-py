@@ -25,7 +25,9 @@
       "Bash(python \"C:/dev/IDMS/gamut-volume-py/extract_doc2.py\")",
       "Bash(python \"C:/dev/IDMS/gamut-volume-py/check_doc2_end.py\")",
       "Bash(pip install *)",
-      "Bash(pytest tests/test_cli.py -v)"
+      "Bash(pytest tests/test_cli.py -v)",
+      "Read(//mnt/c/dev/IDMS/gamut-rings-app/**)",
+      "Read(//mnt/c/dev/IDMS/gamut-rings-app/src/**)"
     ]
   }
 }
