@@ -11,7 +11,7 @@
           <RingsView />
         </TabPanel>
         <TabPanel value="surface">
-          <div class="main-panel__placeholder">Surface view — coming in Stage 5</div>
+          <SurfaceView />
         </TabPanel>
         <TabPanel value="analysis">
           <div class="main-panel__placeholder">Analysis view — coming in Stage 6</div>
@@ -45,6 +45,7 @@ import { useUiStore } from '../stores/uiStore.js'
 import { useGamutStore } from '../stores/gamutStore.js'
 import { useSelectionStore } from '../stores/selectionStore.js'
 import RingsView from './RingsView.vue'
+import SurfaceView from './SurfaceView.vue'
 import { useFileDrop } from '../composables/useFileDrop.js'
 
 const ui = useUiStore()

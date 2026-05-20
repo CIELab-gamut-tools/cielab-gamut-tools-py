@@ -39,6 +39,9 @@ export const useUiStore = defineStore('ui', {
       dpi: 150,
     },
     ringsRenderCounter: 0,
+    surfaceOptions: {
+      perGamut: {},  // id → { visible: bool, alpha: number }
+    },
   }),
 
   actions: {
@@ -53,6 +56,14 @@ export const useUiStore = defineStore('ui', {
     },
     forceRender() {
       this.ringsRenderCounter++
+    },
+    setSurfaceVisible(id, visible) {
+      const cur = this.surfaceOptions.perGamut[id]
+      this.surfaceOptions.perGamut[id] = { visible, alpha: cur?.alpha ?? 0.75 }
+    },
+    setSurfaceAlpha(id, alpha) {
+      const cur = this.surfaceOptions.perGamut[id]
+      this.surfaceOptions.perGamut[id] = { visible: cur?.visible ?? true, alpha }
     },
   },
 

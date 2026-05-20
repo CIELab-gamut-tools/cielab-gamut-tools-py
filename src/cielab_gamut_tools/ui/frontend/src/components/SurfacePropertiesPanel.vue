@@ -1,0 +1,164 @@
+<template>
+  <div v-if="ui.activeView === 'surface'" class="spp">
+    <button class="spp__header" @click="open = !open">
+      <span class="spp__title">Surface Options</span>
+      <i class="pi" :class="open ? 'pi-chevron-down' : 'pi-chevron-up'" />
+    </button>
+
+    <div v-if="open" class="spp__body">
+      <div v-if="activeGamuts.length === 0" class="spp__empty">
+        No gamuts selected
+      </div>
+      <template v-else>
+        <div v-for="g in activeGamuts" :key="g.id" class="spp__row">
+          <span class="spp__swatch" :style="{ background: g.colour }" />
+          <span class="spp__label" :title="g.label">{{ g.label }}</span>
+          <button class="spp__eye" :title="opts(g.id).visible ? 'Hide' : 'Show'"
+                  @click="ui.setSurfaceVisible(g.id, !opts(g.id).visible)">
+            <i class="pi" :class="opts(g.id).visible ? 'pi-eye' : 'pi-eye-slash'" />
+          </button>
+          <input class="spp__alpha" type="range" min="0.05" max="1" step="0.05"
+                 :value="opts(g.id).alpha"
+                 :disabled="!opts(g.id).visible"
+                 @input="ui.setSurfaceAlpha(g.id, +$event.target.value)" />
+          <span class="spp__alpha-val">{{ Math.round(opts(g.id).alpha * 100) }}%</span>
+        </div>
+      </template>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { ref, computed } from 'vue'
+import { useUiStore } from '../stores/uiStore.js'
+import { useSelectionStore } from '../stores/selectionStore.js'
+import { useGamutStore } from '../stores/gamutStore.js'
+
+const ui = useUiStore()
+const selection = useSelectionStore()
+const gamuts = useGamutStore()
+const open = ref(true)
+
+const activeGamuts = computed(() => {
+  const ids = []
+  if (selection.dutId) ids.push(selection.dutId)
+  for (const id of selection.referenceIds) ids.push(id)
+  return ids.map(id => gamuts.gamuts[id]).filter(Boolean)
+})
+
+function opts(id) {
+  return ui.surfaceOptions.perGamut[id] ?? { visible: true, alpha: 0.75 }
+}
+</script>
+
+<style scoped>
+.spp {
+  flex-shrink: 0;
+  border-top: 1px solid var(--p-surface-200);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-height: 55vh;
+}
+
+.spp__header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.35rem 0.75rem;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--p-text-muted-color);
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  flex-shrink: 0;
+}
+
+.spp__header:hover {
+  background: var(--p-surface-100);
+}
+
+.spp__title {
+  flex: 1;
+  text-align: left;
+}
+
+.spp__body {
+  overflow-y: auto;
+  padding: 0.35rem 0.75rem 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.spp__empty {
+  font-size: 0.72rem;
+  color: var(--p-text-muted-color);
+  text-align: center;
+  padding: 0.25rem 0;
+}
+
+.spp__row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 22px;
+}
+
+.spp__swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex-shrink: 0;
+  border: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+}
+
+.spp__label {
+  flex: 1;
+  font-size: 0.72rem;
+  color: var(--p-text-color);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.spp__eye {
+  flex-shrink: 0;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--p-text-muted-color);
+  padding: 0 2px;
+  font-size: 0.75rem;
+  line-height: 1;
+}
+
+.spp__eye:hover {
+  color: var(--p-primary-500);
+}
+
+.spp__alpha {
+  width: 60px;
+  flex-shrink: 0;
+  cursor: pointer;
+  accent-color: var(--p-primary-500);
+}
+
+.spp__alpha:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.spp__alpha-val {
+  font-size: 0.68rem;
+  color: var(--p-text-muted-color);
+  width: 28px;
+  text-align: right;
+  flex-shrink: 0;
+}
+</style>

@@ -35,6 +35,7 @@
     </div>
 
     <RingsPropertiesPanel />
+    <SurfacePropertiesPanel />
   </aside>
 
   <AddGamutModal v-model="showAdd" />
@@ -46,6 +47,7 @@ import { useGamutStore } from '../stores/gamutStore.js'
 import GamutItem from './GamutItem.vue'
 import AddGamutModal from './AddGamutModal.vue'
 import RingsPropertiesPanel from './RingsPropertiesPanel.vue'
+import SurfacePropertiesPanel from './SurfacePropertiesPanel.vue'
 import { useFileDrop } from '../composables/useFileDrop.js'
 
 const gamuts = useGamutStore()
