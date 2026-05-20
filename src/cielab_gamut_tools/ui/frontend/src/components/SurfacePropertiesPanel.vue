@@ -6,6 +6,14 @@
     </button>
 
     <div v-if="open" class="spp__body">
+      <div class="spp__proj-row">
+        <span class="spp__proj-label">Projection</span>
+        <span class="spp__proj-end">Iso</span>
+        <input class="spp__proj-slider" type="range" min="0" max="1" step="0.01"
+               :value="ui.surfaceOptions.perspectiveBlend"
+               @input="ui.setSurfacePerspective(+$event.target.value)" />
+        <span class="spp__proj-end">Persp</span>
+      </div>
       <div v-if="activeGamuts.length === 0" class="spp__empty">
         No gamuts selected
       </div>
@@ -160,5 +168,34 @@ function opts(id) {
   width: 28px;
   text-align: right;
   flex-shrink: 0;
+}
+
+.spp__proj-row {
+  display: grid;
+  grid-template-columns: auto auto 1fr auto;
+  align-items: center;
+  gap: 0.4rem;
+  padding-bottom: 0.3rem;
+  border-bottom: 1px solid var(--p-surface-200);
+  margin-bottom: 0.1rem;
+}
+
+.spp__proj-label {
+  font-size: 0.72rem;
+  color: var(--p-text-color);
+  flex-shrink: 0;
+}
+
+.spp__proj-end {
+  font-size: 0.65rem;
+  color: var(--p-text-muted-color);
+  flex-shrink: 0;
+}
+
+.spp__proj-slider {
+  flex: 1;
+  width: 100%;
+  cursor: pointer;
+  accent-color: var(--p-primary-500);
 }
 </style>

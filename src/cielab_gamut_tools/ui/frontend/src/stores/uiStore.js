@@ -40,7 +40,8 @@ export const useUiStore = defineStore('ui', {
     },
     ringsRenderCounter: 0,
     surfaceOptions: {
-      perGamut: {},  // id → { visible: bool, alpha: number }
+      perGamut: {},          // id → { visible: bool, alpha: number }
+      perspectiveBlend: 1,   // 0 = isometric, 1 = perspective
     },
   }),
 
@@ -64,6 +65,9 @@ export const useUiStore = defineStore('ui', {
     setSurfaceAlpha(id, alpha) {
       const cur = this.surfaceOptions.perGamut[id]
       this.surfaceOptions.perGamut[id] = { visible: cur?.visible ?? true, alpha }
+    },
+    setSurfacePerspective(blend) {
+      this.surfaceOptions.perspectiveBlend = Math.max(0, Math.min(1, blend))
     },
   },
 

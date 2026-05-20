@@ -10,15 +10,78 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 const props = defineProps({
   // Array of { id, colour, surface: {vertices, faces} | null, visible, alpha }
   gamuts: { type: Array, default: () => [] },
+  // 0 = isometric (narrow FOV), 1 = perspective (normal FOV)
+  perspectiveBlend: { type: Number, default: 1 },
 })
 
 const container = ref(null)
 
-let renderer, scene, camera, controls, animId, ro
+let renderer, scene, camera, perspCamera, orthoCamera, controls, animId, ro
 const meshMap = new Map()  // id → { mesh, geo, mat }
 let axisGroup = null
 let tickGroup  = null
 let currentTickState = null
+
+// ── Projection blend — perspective (blend>0) ↔ true isometric (blend=0) ─────
+const FOV_PERSPECTIVE = 45   // degrees at blend=1; FOV = 45*blend for blend>0
+
+// Switch between PerspectiveCamera (blend>0) and OrthographicCamera (blend=0).
+// Invariant: viewHeight = 2*dist*tan(fov/2) is preserved across every transition.
+// For perspective at small blend values the camera moves very far back; the
+// animate loop keeps near/far tight around the scene to maintain depth precision.
+function applyPerspectiveBlend(blend) {
+  if (!perspCamera || !controls) return
+
+  if (blend === 0) {
+    if (camera !== orthoCamera) {
+      const dist = perspCamera.position.distanceTo(controls.target)
+      const halfH = dist * Math.tan(perspCamera.fov / 2 * Math.PI / 180)
+      const aspect = perspCamera.aspect
+      orthoCamera.left   = -halfH * aspect
+      orthoCamera.right  =  halfH * aspect
+      orthoCamera.top    =  halfH
+      orthoCamera.bottom = -halfH
+      orthoCamera.near   = dist - 400
+      orthoCamera.far    = dist + 400
+      orthoCamera.zoom   = 1
+      orthoCamera.position.copy(perspCamera.position)
+      orthoCamera.quaternion.copy(perspCamera.quaternion)
+      orthoCamera.up.copy(perspCamera.up)
+      orthoCamera.updateProjectionMatrix()
+      camera = orthoCamera
+      controls.object = orthoCamera
+      controls.update()
+    }
+    return
+  }
+
+  if (camera === orthoCamera) {
+    const halfH = orthoCamera.top / orthoCamera.zoom
+    const newFovRad = FOV_PERSPECTIVE * blend * Math.PI / 180
+    const newDist = halfH / Math.tan(newFovRad / 2)
+    const dir = new THREE.Vector3().subVectors(orthoCamera.position, controls.target).normalize()
+    perspCamera.fov = FOV_PERSPECTIVE * blend
+    perspCamera.updateProjectionMatrix()
+    perspCamera.position.copy(controls.target).addScaledVector(dir, newDist)
+    perspCamera.quaternion.copy(orthoCamera.quaternion)
+    perspCamera.up.copy(orthoCamera.up)
+    camera = perspCamera
+    controls.object = perspCamera
+    controls.update()
+    return
+  }
+
+  // Perspective-only path: vary FOV and compensate distance to preserve viewHeight.
+  const newFov = FOV_PERSPECTIVE * blend
+  const dir = new THREE.Vector3().subVectors(perspCamera.position, controls.target).normalize()
+  const currentDist = perspCamera.position.distanceTo(controls.target)
+  const oldFovRad = perspCamera.fov * Math.PI / 180
+  const newFovRad = newFov * Math.PI / 180
+  const newDist = currentDist * Math.tan(oldFovRad / 2) / Math.tan(newFovRad / 2)
+  perspCamera.fov = newFov
+  perspCamera.updateProjectionMatrix()
+  perspCamera.position.copy(controls.target).addScaledVector(dir, newDist)
+}
 
 // ── Coordinate constants (Three.js: X=b*, Y=L*, Z=a*) ──────────────────────
 const X0 = -128, X1 = 128   // b* extent
@@ -314,9 +377,11 @@ onMounted(() => {
   scene = new THREE.Scene()
   scene.background = new THREE.Color(0xf0f2f5)
 
-  camera = new THREE.PerspectiveCamera(45, w / h, 1, 2000)
-  camera.position.set(50, 120, 320)
-  camera.lookAt(0, 50, 0)
+  perspCamera = new THREE.PerspectiveCamera(FOV_PERSPECTIVE, w / h, 1, 10000)
+  perspCamera.position.set(50, 120, 320)
+  perspCamera.lookAt(0, 50, 0)
+  orthoCamera = new THREE.OrthographicCamera(0, 0, 0, 0, -5000, 5000)
+  camera = perspCamera
 
   renderer = new THREE.WebGLRenderer({ antialias: true })
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
@@ -340,14 +405,23 @@ onMounted(() => {
   controls.dampingFactor = 0.08
   controls.update()
 
+  // Apply initial projection blend (handles persisted non-default values).
+  applyPerspectiveBlend(props.perspectiveBlend)
+
   // Rebuild ticks whenever the camera moves; stateEqual guard makes this cheap.
   controls.addEventListener('change', updateTicks)
 
   ro = new ResizeObserver(entries => {
     const { width, height } = entries[0].contentRect
     if (width === 0 || height === 0) return
-    camera.aspect = width / height
-    camera.updateProjectionMatrix()
+    perspCamera.aspect = width / height
+    perspCamera.updateProjectionMatrix()
+    if (camera === orthoCamera) {
+      const halfH = orthoCamera.top
+      orthoCamera.left  = -halfH * (width / height)
+      orthoCamera.right =  halfH * (width / height)
+      orthoCamera.updateProjectionMatrix()
+    }
     renderer.setSize(width, height)
   })
   ro.observe(el)
@@ -355,6 +429,18 @@ onMounted(() => {
   function animate() {
     animId = requestAnimationFrame(animate)
     controls.update()
+    // Keep near/far surrounding the scene. For perspective, critical at low blend
+    // (camera far back). For ortho, near can be negative (objects behind camera ok).
+    {
+      const dist = camera.position.distanceTo(controls.target)
+      const near = (camera === orthoCamera) ? dist - 400 : Math.max(0.1, dist - 300)
+      const far  = dist + 400
+      if (camera.near !== near || camera.far !== far) {
+        camera.near = near
+        camera.far  = far
+        camera.updateProjectionMatrix()
+      }
+    }
     renderer.render(scene, camera)
   }
   animate()
@@ -369,6 +455,11 @@ onMounted(() => {
 watch(
   () => props.gamuts.map(g => `${g.id}:${g.colour}:${g.visible}:${g.alpha}:${!!g.surface}`).join('|'),
   () => { if (scene) syncMeshes(props.gamuts) },
+)
+
+watch(
+  () => props.perspectiveBlend,
+  (blend) => { if (perspCamera && controls) applyPerspectiveBlend(blend) },
 )
 
 onUnmounted(() => {

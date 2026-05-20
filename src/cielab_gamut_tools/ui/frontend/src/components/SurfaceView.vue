@@ -6,7 +6,9 @@
     <div v-else-if="isLoading" class="surface-view__status">
       <i class="pi pi-spin pi-spinner" /> Loading surface…
     </div>
-    <GamutSurfaceCanvas v-else :gamuts="activeGamuts" class="surface-view__canvas" />
+    <GamutSurfaceCanvas v-else :gamuts="activeGamuts"
+      :perspectiveBlend="ui.surfaceOptions.perspectiveBlend"
+      class="surface-view__canvas" />
   </div>
 </template>
 
