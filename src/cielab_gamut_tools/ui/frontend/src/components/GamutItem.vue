@@ -38,7 +38,8 @@ const isRef = computed(() => selection.referenceIds.includes(props.gamut.id))
 
 const volText = computed(() => {
   if (props.gamut.volume === null) return '—'
-  return Math.round(props.gamut.volume).toLocaleString()
+  const k = props.gamut.volume / 1000
+  return k >= 10 ? Math.round(k) + 'k' : k.toFixed(1) + 'k'
 })
 
 function startEdit() {

@@ -2,7 +2,7 @@
   <div v-if="ui.activeView === 'rings'" class="rpp">
     <button class="rpp__header" @click="open = !open">
       <span class="rpp__title">Ring Options</span>
-      <i class="pi" :class="open ? 'pi-chevron-down' : 'pi-chevron-right'" />
+      <i class="pi" :class="open ? 'pi-chevron-down' : 'pi-chevron-up'" />
     </button>
 
     <div v-if="open" class="rpp__body">

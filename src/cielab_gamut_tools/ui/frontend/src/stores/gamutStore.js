@@ -1,6 +1,10 @@
 import { defineStore } from 'pinia'
 import { listGamuts, getCylmap, getSurface, getVolume, deleteGamut } from '../api.js'
 
+// Module-level drain state — store is a singleton so this is safe
+let draining = false
+const failedVolumes = new Set()
+
 export const useGamutStore = defineStore('gamuts', {
   state: () => ({
     // Map from id → gamut entry
@@ -35,6 +39,7 @@ export const useGamutStore = defineStore('gamuts', {
           }
         }
       }
+      this._drainVolumes()
     },
 
     add(item) {
@@ -49,6 +54,7 @@ export const useGamutStore = defineStore('gamuts', {
         cylmap: null,
         surface: null,
       }
+      this._drainVolumes()
     },
 
     remove(id) {
@@ -78,6 +84,7 @@ export const useGamutStore = defineStore('gamuts', {
     async deleteEntry(id) {
       await deleteGamut(id)
       delete this.gamuts[id]
+      failedVolumes.delete(id)
     },
 
     async ensureVolume(id) {
@@ -87,6 +94,27 @@ export const useGamutStore = defineStore('gamuts', {
         this.gamuts[id].volume = volume
       }
       return this.gamuts[id].volume
+    },
+
+    async _drainVolumes() {
+      if (draining) return
+      draining = true
+      try {
+        while (true) {
+          const next = Object.values(this.gamuts)
+            .find(g => g.volume === null && !failedVolumes.has(g.id))
+          if (!next) break
+          try {
+            const { volume } = await getVolume(next.id)
+            if (this.gamuts[next.id]) this.gamuts[next.id].volume = volume
+          } catch {
+            failedVolumes.add(next.id)
+          }
+          await new Promise(r => setTimeout(r, 300))
+        }
+      } finally {
+        draining = false
+      }
     },
   },
 })
