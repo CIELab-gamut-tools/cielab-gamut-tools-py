@@ -1,5 +1,6 @@
 <template>
-  <aside class="gamut-sidebar">
+  <aside class="gamut-sidebar" :class="{ 'gamut-sidebar--drop': isDragging }"
+         v-bind="dropHandlers">
     <div class="gamut-sidebar__header">
       <span class="gamut-sidebar__title">Gamuts</span>
       <button class="gamut-sidebar__add" title="Add gamut" @click="showAdd = true">
@@ -8,7 +9,13 @@
     </div>
 
     <div class="gamut-sidebar__list-area">
-      <div v-if="loading" class="gamut-sidebar__status">
+      <div v-if="isUploading" class="gamut-sidebar__status">
+        <i class="pi pi-spin pi-spinner" /> Uploading…
+      </div>
+      <div v-else-if="dropError" class="gamut-sidebar__status gamut-sidebar__status--error">
+        <i class="pi pi-exclamation-triangle" /> {{ dropError }}
+      </div>
+      <div v-else-if="loading" class="gamut-sidebar__status">
         <i class="pi pi-spin pi-spinner" /> Loading…
       </div>
       <div v-else-if="fetchError" class="gamut-sidebar__status gamut-sidebar__status--error">
@@ -19,6 +26,11 @@
       </div>
       <div v-else class="gamut-sidebar__list">
         <GamutItem v-for="g in gamuts.list" :key="g.id" :gamut="g" />
+      </div>
+
+      <div v-if="isDragging" class="gamut-sidebar__drop-overlay">
+        <i class="pi pi-upload" />
+        <span>Add gamut</span>
       </div>
     </div>
 
@@ -34,11 +46,16 @@ import { useGamutStore } from '../stores/gamutStore.js'
 import GamutItem from './GamutItem.vue'
 import AddGamutModal from './AddGamutModal.vue'
 import RingsPropertiesPanel from './RingsPropertiesPanel.vue'
+import { useFileDrop } from '../composables/useFileDrop.js'
 
 const gamuts = useGamutStore()
 const loading = ref(false)
 const fetchError = ref(null)
 const showAdd = ref(false)
+
+const { isDragging, isUploading, error: dropError, dropHandlers } = useFileDrop(entry => {
+  gamuts.add(entry)
+})
 
 onMounted(async () => {
   loading.value = true
@@ -104,6 +121,7 @@ onMounted(async () => {
   flex: 1;
   overflow-y: auto;
   min-height: 0;
+  position: relative;
 }
 
 .gamut-sidebar__list {
@@ -123,5 +141,29 @@ onMounted(async () => {
 .gamut-sidebar__status--error {
   color: var(--p-red-500);
   text-align: center;
+}
+
+.gamut-sidebar--drop {
+  border-right-color: var(--p-primary-400);
+}
+
+.gamut-sidebar__drop-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: color-mix(in srgb, var(--p-primary-50) 80%, transparent);
+  border: 2px dashed var(--p-primary-400);
+  border-radius: 4px;
+  pointer-events: none;
+  font-size: 0.85rem;
+  color: var(--p-primary-600);
+}
+
+.gamut-sidebar__drop-overlay .pi {
+  font-size: 1.4rem;
 }
 </style>
