@@ -278,6 +278,16 @@ def rings(
             ),
         ),
     ] = _PrimaryColor.output,
+    primary_chroma: Annotated[
+        Optional[str],
+        typer.Option(
+            "--primary-chroma",
+            help=(
+                "C* radius of primary arrow heads. 'auto' (default) scales to 90 % of the "
+                "axis range. Pass a number to override, e.g. --primary-chroma=150."
+            ),
+        ),
+    ] = None,
     primary_origin: Annotated[
         _PrimaryOrigin,
         typer.Option(
@@ -318,7 +328,7 @@ def rings(
         Optional[str],
         typer.Option(
             "--chroma-rings",
-            help="Draw constant-chroma reference circles at these C* radii (comma-separated, e.g. 50,100,150).",
+            help="Draw constant-chroma reference circles at these C* radii (comma-separated, e.g. 500,1000,1500).",
         ),
     ] = None,
     # ── Plot decoration ───────────────────────────────────────────────────────
@@ -447,6 +457,21 @@ def rings(
                         f"({', '.join(str(int(v)) for v in all_l)}), skipping.[/yellow]"
                     )
 
+    # ── Parse --primary-chroma ────────────────────────────────────────────────
+    parsed_primary_chroma: "float | str | None" = None
+    if primary_chroma is not None:
+        stripped = primary_chroma.strip()
+        if stripped.lower() == "auto":
+            parsed_primary_chroma = "auto"
+        else:
+            try:
+                parsed_primary_chroma = float(stripped)
+            except ValueError:
+                err_console.print(
+                    f"[red]--primary-chroma: expected a number or 'auto', got '{primary_chroma}'[/red]"
+                )
+                raise typer.Exit(1)
+
     # ── Build kwargs ─────────────────────────────────────────────────────────
     kwargs: dict = dict(
         intersection_plot=intersection,
@@ -476,6 +501,8 @@ def rings(
         kwargs["l_label_indices"] = parsed_l_label_indices
     if l_label_color is not None:
         kwargs["l_label_colors"] = l_label_color
+    if parsed_primary_chroma is not None:
+        kwargs["primary_chroma"] = parsed_primary_chroma
 
     dut_gamut = resolve_gamut(gamut)
     ref_gamut = resolve_gamut(reference) if reference is not None else None

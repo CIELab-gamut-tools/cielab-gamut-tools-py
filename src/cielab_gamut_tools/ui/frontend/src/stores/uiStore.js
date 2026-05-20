@@ -23,6 +23,7 @@ export const useUiStore = defineStore('ui', {
       refPrimaries: 'none',
       primaryColor: 'output', // 'input' | 'output'
       primaryOrigin: 'centre',// 'centre' | 'ring'
+      primaryChroma: 'auto',  // 'auto' | numeric string
       showCentMark: true,
       // Ring labels
       lLabels: '10,50',       // 'none' | comma-separated L* values

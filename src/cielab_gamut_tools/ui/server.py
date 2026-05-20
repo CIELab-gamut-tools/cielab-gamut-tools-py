@@ -360,6 +360,16 @@ def _parse_band_ls(s: str) -> float | tuple[float, float] | list[float]:
     return parts
 
 
+def _parse_primary_chroma(s: str) -> float | str:
+    stripped = s.strip()
+    if not stripped or stripped.lower() == "auto":
+        return "auto"
+    try:
+        return float(stripped)
+    except ValueError:
+        return "auto"
+
+
 def _resolve_l_label_indices(
     l_labels: str, effective_l_rings: list[float]
 ) -> list[int] | None:
@@ -399,6 +409,7 @@ class RingsRenderRequest(BaseModel):
     ref_primaries: str = "none"
     primary_color: str = "output"     # "input" | "output"
     primary_origin: str = "centre"    # "centre" | "ring"
+    primary_chroma: str = "auto"      # "auto" | numeric string
     show_cent_mark: bool = True
     # L* ring labels
     l_labels: str = "10,50"          # "none" | comma-separated L* values
@@ -455,6 +466,7 @@ def render_rings(req: RingsRenderRequest) -> Response:
         ref_primaries=req.ref_primaries,
         primary_color=req.primary_color,
         primary_origin=req.primary_origin,
+        primary_chroma=_parse_primary_chroma(req.primary_chroma),
         cent_mark="+k" if req.show_cent_mark else None,
         chroma_rings=parsed_chroma_rings,
         figsize=parsed_figsize,

@@ -66,7 +66,7 @@ def plot_rings(
     # Primary indicators
     primaries: Literal["none", "rgb", "all"] = "rgb",
     primary_color: Literal["input", "output"] = "output",
-    primary_chroma: float | Literal["auto"] = 950.0,
+    primary_chroma: float | Literal["auto"] = "auto",
     primary_origin: Literal["centre", "center", "ring"] = "centre",
     ref_primaries: Literal["none", "rgb", "all"] = "none",
     ref_primary_chroma: float | Literal["auto"] = "auto",
@@ -140,8 +140,10 @@ def plot_rings(
         primary_color: Arrow head colour source. ``"output"`` (default) uses
             the gamut's Lab value converted to sRGB. ``"input"`` uses the
             nominal primary colour.
-        primary_chroma: C* radius of the primary arrow head (default 950).
-            ``"auto"`` sets it to ``max_chroma + 100``.
+        primary_chroma: C* radius of the primary arrow head. ``"auto"``
+            (default) sets it to 90 % of the axis half-extent (derived from
+            ``xlim``/``ylim`` if given, otherwise ``max_chroma × 1.05``).
+            Pass a float to override (e.g. ``primary_chroma=150``).
         primary_origin: Where primary arrows start. ``"centre"`` (default)
             or ``"ring"``.
         ref_primaries: Which reference primaries to show (default ``"none"``).
@@ -219,8 +221,21 @@ def plot_rings(
     if _ref is not None and not intersection_plot:
         max_chroma = max(max_chroma, float(np.sqrt(np.max(ref_x ** 2 + ref_y ** 2))))
 
-    _primary_chroma = max_chroma + 100 if primary_chroma == "auto" else float(primary_chroma)
-    _ref_primary_chroma = _primary_chroma + 50 if ref_primary_chroma == "auto" else float(ref_primary_chroma)
+    # Effective axis half-extent: prefer explicit xlim/ylim so auto arrows
+    # scale correctly even when the caller overrides the axis limits.
+    if xlim is not None:
+        _axis_half_extent = max(abs(xlim[0]), abs(xlim[1]))
+    elif ylim is not None:
+        _axis_half_extent = max(abs(ylim[0]), abs(ylim[1]))
+    else:
+        _axis_half_extent = max_chroma * 1.05
+
+    _primary_chroma = _axis_half_extent * 0.9 if primary_chroma == "auto" else float(primary_chroma)
+    _ref_primary_chroma = (
+        (_axis_half_extent * 0.95 if primary_chroma == "auto" else _primary_chroma + 50)
+        if ref_primary_chroma == "auto"
+        else float(ref_primary_chroma)
+    )
 
     # ── Reference colour bands (intersection_plot only) ───────────────────
     if intersection_plot and show_ref_bands:
@@ -307,12 +322,13 @@ def plot_rings(
         )
 
     # ── Axis padding, labels, title ───────────────────────────────────────
-    # Base extent on ring data; if primary arrows are drawn extend to include them.
+    # Base extent on ring data. Only expand for explicit (non-auto) arrow
+    # lengths — auto arrows are sized to fit within the natural axis extent.
     display_extent = max_chroma * 1.05
-    if n_prims > 0 or n_ref_prims > 0:
-        arrow_extent = max(_primary_chroma if n_prims > 0 else 0,
-                           _ref_primary_chroma if n_ref_prims > 0 else 0)
-        display_extent = max(display_extent, arrow_extent * 1.05)
+    if n_prims > 0 and primary_chroma != "auto":
+        display_extent = max(display_extent, _primary_chroma * 1.05)
+    if n_ref_prims > 0 and ref_primary_chroma != "auto":
+        display_extent = max(display_extent, _ref_primary_chroma * 1.05)
     ax.set_xlim(-display_extent, display_extent)
     ax.set_ylim(-display_extent, display_extent)
     ax.set_xlabel("a*$_{RSS}$")
