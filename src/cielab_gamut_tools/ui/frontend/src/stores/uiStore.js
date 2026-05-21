@@ -77,7 +77,7 @@ export const useUiStore = defineStore('ui', {
       this.surfaceOptions.perspectiveBlend = Math.max(0, Math.min(1, blend))
     },
     setCameraAngle(elev, azim) {
-      this.surfaceOptions.cameraElev = Math.round(Math.max(-85, Math.min(85, elev)))
+      this.surfaceOptions.cameraElev = Math.round(Math.max(-90, Math.min(90, elev)))
       this.surfaceOptions.cameraAzim = Math.round(azim)
     },
   },

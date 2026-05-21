@@ -177,13 +177,37 @@ and full test coverage in `tests/test_ui_server.py`. All tests pass.
 
 ---
 
-## Stage 5 — Surface view
+## Stage 5 — Surface view ✓ COMPLETE
 
-- `GamutSurfaceCanvas`: TresJS component, `BufferGeometry` built from surface mesh JSON
-- Fetch `GET /api/gamuts/:id/surface` on first use, cached in store
-- Orbit controls, per-gamut colour + alpha
-- Multiple gamuts overlaid (DUT + all selected references)
-- `SurfaceOptions` panel: alpha slider, per-gamut visibility toggle
+- `GamutSurfaceCanvas`: Three.js component, `BufferGeometry` built from surface mesh JSON ✓
+- Fetch `GET /api/gamuts/:id/surface` on first use, cached in store ✓
+- Orbit controls, per-gamut alpha + visibility toggle ✓
+- Multiple gamuts overlaid (DUT + all selected references) ✓
+- `SurfacePropertiesPanel`: collapsible panel at bottom of sidebar ✓
+
+### Implementation notes
+
+- **Lab-derived vertex colours** (`src/gamut/labToRgb.js`): CIELab D50 → XYZ D50 → XYZ D65
+  (Bradford CAT) → linear RGB → gamma, parameterised by `colourSpace` ('srgb' | 'display-p3').
+  The colour space is an architectural parameter threaded from `uiStore` → `SurfaceView` →
+  `GamutSurfaceCanvas` → `labVerticesToColors()`; switching to display-P3 requires only setting
+  `colourSpace: 'display-p3'` in the store and enabling `renderer.outputColorSpace` — no rewrite.
+- **Wireframe mode** per gamut: `THREE.LineSegments` with a custom edges geometry (unique
+  undirected edges only, vertex colours copied from solid geometry). Toggle in panel row.
+- **Winding order**: face indices are reversed in `buildGeometry` (swap i[1] and i[2]) to produce
+  outward-facing normals in Three.js's (X=b*, Y=L*, Z=a*) coordinate space. The Python
+  tessellation winding targets matplotlib's (a*, b*, L*) axis order; the coordinate remapping
+  changes handedness, requiring the flip.
+- **Projection blend**: orthographic ↔ perspective slider (0–1), preserving view height across
+  the transition.
+- **Camera angle sync**: `cameraElev` (−90…90°) and `cameraAzim` (−180…180°) stored in
+  `uiStore`, displayed and editable in the panel. OrbitControls emits `camera-change` → store;
+  panel inputs watch the store → reposition camera. A last-emitted-value guard (< 1° tolerance)
+  breaks the orbit → prop-watch feedback loop.
+- **Render order**: transparent meshes sorted back-to-front by `nearDist = dist − boundingRadius`
+  so nested gamuts (e.g. sRGB inside BT.2020) composite correctly.
+- `uiStore.surfaceOptions`: `{ perGamut: {id → {visible, alpha, wireframe}}, perspectiveBlend,
+  cameraElev, cameraAzim, colourSpace }` — all persisted to localStorage.
 
 ---
 

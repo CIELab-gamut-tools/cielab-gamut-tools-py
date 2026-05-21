@@ -22,7 +22,7 @@
         <span class="spp__cam-label">Elevation</span>
         <input class="spp__angle-input" type="number"
                :value="ui.surfaceOptions.cameraElev"
-               min="-85" max="85" step="1"
+               min="-90" max="90" step="1"
                @change="ui.setCameraAngle(+$event.target.value, ui.surfaceOptions.cameraAzim)" />
         <span class="spp__cam-unit">°</span>
         <span class="spp__cam-label">Azimuth</span>

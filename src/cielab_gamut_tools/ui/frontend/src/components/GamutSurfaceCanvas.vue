@@ -130,7 +130,11 @@ function setCameraFromAngles(elev, azim) {
   const sp = new THREE.Spherical()
   const rel = new THREE.Vector3().subVectors(camera.position, controls.target)
   sp.setFromCartesianCoords(rel.x, rel.y, rel.z)
-  sp.phi   = (90 - elev) * Math.PI / 180
+  // Keep phi just off the poles so the position vector retains an x/z component.
+  // At exactly phi=0 the position is (0,r,0) and atan2(0,0)=0 — OrbitControls'
+  // next update() would silently reset theta (azimuth) to 0.
+  const EPS = 1e-4
+  sp.phi   = Math.max(EPS, Math.min(Math.PI - EPS, (90 - elev) * Math.PI / 180))
   sp.theta = azim * Math.PI / 180
   camera.position.copy(
     new THREE.Vector3().setFromSpherical(sp).add(controls.target)
@@ -156,9 +160,13 @@ function buildGeometry({ vertices, faces }, colourSpace) {
   }
   const flatIdx = new Uint16Array(faces.length * 3)
   for (let i = 0; i < faces.length; i++) {
+    // Reverse winding so normals point outward in Three.js (X=b*, Y=L*, Z=a*).
+    // The Python tessellation winding is designed for matplotlib's (a*, b*, L*)
+    // axis order; the coordinate remapping changes handedness, so normals are
+    // flipped here to restore outward-facing fronts and correct Phong shading.
     flatIdx[i * 3 + 0] = faces[i][0]
-    flatIdx[i * 3 + 1] = faces[i][1]
-    flatIdx[i * 3 + 2] = faces[i][2]
+    flatIdx[i * 3 + 1] = faces[i][2]
+    flatIdx[i * 3 + 2] = faces[i][1]
   }
   const colors = labVerticesToColors(vertices, colourSpace)
 
