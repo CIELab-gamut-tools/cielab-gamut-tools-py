@@ -40,8 +40,11 @@ export const useUiStore = defineStore('ui', {
     },
     ringsRenderCounter: 0,
     surfaceOptions: {
-      perGamut: {},          // id → { visible: bool, alpha: number }
-      perspectiveBlend: 1,   // 0 = isometric, 1 = perspective
+      perGamut: {},            // id → { visible: bool, alpha: number, wireframe: bool }
+      perspectiveBlend: 1,     // 0 = isometric, 1 = perspective
+      cameraElev: 12,          // degrees above horizontal plane (−85…85)
+      cameraAzim: 9,           // degrees around L* axis, from +a* (−180…180)
+      colourSpace: 'srgb',     // 'srgb' | 'display-p3' — hook for wide-gamut rendering
     },
   }),
 
@@ -60,14 +63,22 @@ export const useUiStore = defineStore('ui', {
     },
     setSurfaceVisible(id, visible) {
       const cur = this.surfaceOptions.perGamut[id]
-      this.surfaceOptions.perGamut[id] = { visible, alpha: cur?.alpha ?? 0.75 }
+      this.surfaceOptions.perGamut[id] = { visible, alpha: cur?.alpha ?? 0.75, wireframe: cur?.wireframe ?? false }
     },
     setSurfaceAlpha(id, alpha) {
       const cur = this.surfaceOptions.perGamut[id]
-      this.surfaceOptions.perGamut[id] = { visible: cur?.visible ?? true, alpha }
+      this.surfaceOptions.perGamut[id] = { visible: cur?.visible ?? true, alpha, wireframe: cur?.wireframe ?? false }
+    },
+    setSurfaceWireframe(id, wireframe) {
+      const cur = this.surfaceOptions.perGamut[id]
+      this.surfaceOptions.perGamut[id] = { visible: cur?.visible ?? true, alpha: cur?.alpha ?? 0.75, wireframe }
     },
     setSurfacePerspective(blend) {
       this.surfaceOptions.perspectiveBlend = Math.max(0, Math.min(1, blend))
+    },
+    setCameraAngle(elev, azim) {
+      this.surfaceOptions.cameraElev = Math.round(Math.max(-85, Math.min(85, elev)))
+      this.surfaceOptions.cameraAzim = Math.round(azim)
     },
   },
 

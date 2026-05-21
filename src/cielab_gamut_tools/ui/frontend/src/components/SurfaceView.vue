@@ -6,8 +6,13 @@
     <div v-else-if="isLoading" class="surface-view__status">
       <i class="pi pi-spin pi-spinner" /> Loading surface…
     </div>
-    <GamutSurfaceCanvas v-else :gamuts="activeGamuts"
+    <GamutSurfaceCanvas v-else
+      :gamuts="activeGamuts"
       :perspectiveBlend="ui.surfaceOptions.perspectiveBlend"
+      :cameraElev="ui.surfaceOptions.cameraElev"
+      :cameraAzim="ui.surfaceOptions.cameraAzim"
+      :colourSpace="ui.surfaceOptions.colourSpace"
+      @camera-change="ui.setCameraAngle($event.elev, $event.azim)"
       class="surface-view__canvas" />
   </div>
 </template>
@@ -62,8 +67,9 @@ const activeGamuts = computed(() =>
         id,
         colour: g.colour,
         surface: g.surface,
-        visible: opts?.visible ?? true,
-        alpha: opts?.alpha ?? 0.75,
+        visible:   opts?.visible   ?? true,
+        alpha:     opts?.alpha     ?? 0.75,
+        wireframe: opts?.wireframe ?? false,
       }
     })
     .filter(Boolean),

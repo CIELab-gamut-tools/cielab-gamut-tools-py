@@ -6,29 +6,39 @@
 import { ref, watch, onMounted, onUnmounted } from 'vue'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
+import { labVerticesToColors } from '../gamut/labToRgb.js'
 
 const props = defineProps({
-  // Array of { id, colour, surface: {vertices, faces} | null, visible, alpha }
+  // Array of { id, colour, surface: {vertices, faces} | null, visible, alpha, wireframe }
   gamuts: { type: Array, default: () => [] },
   // 0 = isometric (narrow FOV), 1 = perspective (normal FOV)
   perspectiveBlend: { type: Number, default: 1 },
+  // Degrees above the horizontal (a*b*) plane — syncs with the panel inputs
+  cameraElev: { type: Number, default: 12 },
+  // Degrees around the L* axis from +a* direction — syncs with the panel inputs
+  cameraAzim: { type: Number, default: 9 },
+  // Colour space for Lab→RGB vertex colour conversion ('srgb' | 'display-p3')
+  colourSpace: { type: String, default: 'srgb' },
 })
+
+const emit = defineEmits(['camera-change'])
 
 const container = ref(null)
 
 let renderer, scene, camera, perspCamera, orthoCamera, controls, animId, ro
-const meshMap = new Map()  // id → { mesh, geo, mat }
+// id → { solidMesh, edgesMesh, solidGeo, edgesGeo, solidMat, edgesMat }
+const meshMap = new Map()
 let axisGroup = null
 let tickGroup  = null
 let currentTickState = null
 
+// Tracks the last angles we emitted so we can break the prop-watch feedback loop.
+let lastEmittedElev = null
+let lastEmittedAzim = null
+
 // ── Projection blend — perspective (blend>0) ↔ true isometric (blend=0) ─────
 const FOV_PERSPECTIVE = 45   // degrees at blend=1; FOV = 45*blend for blend>0
 
-// Switch between PerspectiveCamera (blend>0) and OrthographicCamera (blend=0).
-// Invariant: viewHeight = 2*dist*tan(fov/2) is preserved across every transition.
-// For perspective at small blend values the camera moves very far back; the
-// animate loop keeps near/far tight around the scene to maintain depth precision.
 function applyPerspectiveBlend(blend) {
   if (!perspCamera || !controls) return
 
@@ -96,12 +106,49 @@ const V_EDGES = [
   { x: X0, z: Z1, dx: -1, dz:  1 },
 ]
 
-// ── Gamut geometry ──────────────────────────────────────────────────────────
+// ── Camera angle helpers ────────────────────────────────────────────────────
+// Convention: elev = degrees above the horizontal (XZ / a*b*) plane (0=side, 90=top).
+// azim = degrees in the XZ plane measured from +Z (a*), counterclockwise looking down.
+// Matches the Three.js Spherical: phi from +Y, theta from +Z.
 
-// vertices: [[L*, a*, b*], ...] → mapped to [b*, L*, a*] (X, Y, Z).
-function buildGeometry({ vertices, faces }) {
-  const positions = new Float32Array(vertices.length * 3)
-  for (let i = 0; i < vertices.length; i++) {
+function getCameraAngles() {
+  if (!controls || !camera) return null
+  const sp = new THREE.Spherical()
+  const rel = new THREE.Vector3().subVectors(camera.position, controls.target)
+  sp.setFromCartesianCoords(rel.x, rel.y, rel.z)
+  let azim = sp.theta * 180 / Math.PI
+  while (azim >  180) azim -= 360
+  while (azim < -180) azim += 360
+  return {
+    elev: Math.round(90 - sp.phi * 180 / Math.PI),
+    azim: Math.round(azim),
+  }
+}
+
+function setCameraFromAngles(elev, azim) {
+  if (!controls || !camera) return
+  const sp = new THREE.Spherical()
+  const rel = new THREE.Vector3().subVectors(camera.position, controls.target)
+  sp.setFromCartesianCoords(rel.x, rel.y, rel.z)
+  sp.phi   = (90 - elev) * Math.PI / 180
+  sp.theta = azim * Math.PI / 180
+  camera.position.copy(
+    new THREE.Vector3().setFromSpherical(sp).add(controls.target)
+  )
+  camera.lookAt(controls.target)
+  controls.update()
+  updateTicks()
+  updateRenderOrder()
+}
+
+// ── Gamut geometry ──────────────────────────────────────────────────────────
+// vertices: [[L*, a*, b*], …] → Three.js [b*, L*, a*] (X, Y, Z)
+// Vertex colours are computed from Lab values using the current colourSpace.
+
+function buildGeometry({ vertices, faces }, colourSpace) {
+  const n = vertices.length
+  const positions = new Float32Array(n * 3)
+  for (let i = 0; i < n; i++) {
     const [L, a, b] = vertices[i]
     positions[i * 3 + 0] = b
     positions[i * 3 + 1] = L
@@ -113,10 +160,54 @@ function buildGeometry({ vertices, faces }) {
     flatIdx[i * 3 + 1] = faces[i][1]
     flatIdx[i * 3 + 2] = faces[i][2]
   }
+  const colors = labVerticesToColors(vertices, colourSpace)
+
   const geo = new THREE.BufferGeometry()
   geo.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+  geo.setAttribute('color',    new THREE.BufferAttribute(colors, 3))
   geo.setIndex(new THREE.BufferAttribute(flatIdx, 1))
   geo.computeVertexNormals()
+  return geo
+}
+
+// Build a LineSegments geometry for wireframe rendering, carrying vertex colours
+// derived from the solid geometry's indexed faces.
+function buildEdgesGeometry(solidGeo) {
+  const index  = solidGeo.index.array
+  const srcPos = solidGeo.attributes.position
+  const srcCol = solidGeo.attributes.color
+  const n = index.length  // 3 × numFaces
+
+  // Collect unique undirected edges.
+  const seen = new Set()
+  const edgeVerts = []   // pairs of original vertex indices
+  for (let i = 0; i < n; i += 3) {
+    const a = index[i], b = index[i + 1], c = index[i + 2]
+    for (const [u, v] of [[a, b], [b, c], [c, a]]) {
+      const key = u < v ? u * 65536 + v : v * 65536 + u
+      if (!seen.has(key)) {
+        seen.add(key)
+        edgeVerts.push(u, v)
+      }
+    }
+  }
+
+  const ne = edgeVerts.length
+  const positions = new Float32Array(ne * 3)
+  const colors    = new Float32Array(ne * 3)
+  for (let i = 0; i < ne; i++) {
+    const vi = edgeVerts[i]
+    positions[i * 3]     = srcPos.getX(vi)
+    positions[i * 3 + 1] = srcPos.getY(vi)
+    positions[i * 3 + 2] = srcPos.getZ(vi)
+    colors[i * 3]         = srcCol.getX(vi)
+    colors[i * 3 + 1]     = srcCol.getY(vi)
+    colors[i * 3 + 2]     = srcCol.getZ(vi)
+  }
+
+  const geo = new THREE.BufferGeometry()
+  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+  geo.setAttribute('color',    new THREE.BufferAttribute(colors, 3))
   return geo
 }
 
@@ -125,49 +216,63 @@ function syncMeshes(gamuts) {
 
   for (const [id, entry] of meshMap) {
     if (!activeIds.has(id)) {
-      scene.remove(entry.mesh)
-      entry.geo.dispose()
-      entry.mat.dispose()
+      scene.remove(entry.solidMesh)
+      scene.remove(entry.edgesMesh)
+      entry.solidGeo.dispose()
+      entry.edgesGeo.dispose()
+      entry.solidMat.dispose()
+      entry.edgesMat.dispose()
       meshMap.delete(id)
     }
   }
 
   for (const g of gamuts) {
     if (!g.surface) continue
-    const alpha   = g.alpha   ?? 0.75
-    const visible = g.visible ?? true
+    const alpha     = g.alpha     ?? 0.75
+    const visible   = g.visible   ?? true
+    const wireframe = g.wireframe ?? false
 
     if (meshMap.has(g.id)) {
-      const { mesh, mat } = meshMap.get(g.id)
-      mat.color.set(g.colour)
-      mat.opacity = alpha
-      mat.transparent = alpha < 1.0
-      mat.depthWrite = alpha >= 1.0
-      mat.needsUpdate = true
-      mesh.visible = visible
+      const { solidMesh, edgesMesh, solidMat, edgesMat } = meshMap.get(g.id)
+      solidMat.opacity   = alpha
+      solidMat.transparent = alpha < 1.0
+      solidMat.depthWrite  = alpha >= 1.0
+      solidMat.needsUpdate = true
+      edgesMat.opacity     = alpha
+      edgesMat.transparent = alpha < 1.0
+      edgesMat.needsUpdate = true
+      solidMesh.visible  = !wireframe && visible
+      edgesMesh.visible  =  wireframe && visible
     } else {
-      const geo = buildGeometry(g.surface)
-      const mat = new THREE.MeshPhongMaterial({
-        color: new THREE.Color(g.colour),
+      const solidGeo = buildGeometry(g.surface, props.colourSpace)
+      const edgesGeo = buildEdgesGeometry(solidGeo)
+      const solidMat = new THREE.MeshPhongMaterial({
+        vertexColors: true,
+        color: 0xffffff,   // white so vertex colours are unmodulated
         opacity: alpha,
         transparent: alpha < 1.0,
         depthWrite: alpha >= 1.0,
         side: THREE.FrontSide,
         shininess: 30,
       })
-      const mesh = new THREE.Mesh(geo, mat)
-      mesh.visible = visible
-      scene.add(mesh)
-      meshMap.set(g.id, { mesh, geo, mat })
+      const edgesMat = new THREE.LineBasicMaterial({
+        vertexColors: true,
+        opacity: alpha,
+        transparent: alpha < 1.0,
+      })
+      const solidMesh = new THREE.Mesh(solidGeo, solidMat)
+      const edgesMesh = new THREE.LineSegments(edgesGeo, edgesMat)
+      solidMesh.visible = !wireframe && visible
+      edgesMesh.visible =  wireframe && visible
+      scene.add(solidMesh)
+      scene.add(edgesMesh)
+      meshMap.set(g.id, { solidMesh, edgesMesh, solidGeo, edgesGeo, solidMat, edgesMat })
     }
   }
   updateRenderOrder()
 }
 
 // ── Axis box — static parts (panes + edges) ─────────────────────────────────
-// Panes: inward-pointing normals + FrontSide — the 3 panes facing the camera
-// are automatically hidden by Three.js backface culling, no per-frame logic.
-// Grid lines are baked into each pane's canvas texture so they hide with it.
 
 function makeGridTexture(texW, texH, hMin, hMax, vMin, vMax) {
   const canvas = document.createElement('canvas')
@@ -194,7 +299,6 @@ function makeGridTexture(texW, texH, hMin, hMax, vMin, vMax) {
 function buildAxisBox() {
   const group = new THREE.Group()
 
-  // Panes — [cx, cy, cz, rotX, rotY, planeW, planeH, texW, texH, hMin, hMax, vMin, vMax]
   const paneConfigs = [
     [X0,  50,   0,  0,          Math.PI/2,  256, 100, 512, 200,  -128, 128,    0, 100],
     [X1,  50,   0,  0,         -Math.PI/2,  256, 100, 512, 200,  -128, 128,    0, 100],
@@ -216,7 +320,6 @@ function buildAxisBox() {
     group.add(mesh)
   }
 
-  // Edges
   const corners = [
     [X0,Y0,Z0],[X1,Y0,Z0],[X1,Y1,Z0],[X0,Y1,Z0],
     [X0,Y0,Z1],[X1,Y0,Z1],[X1,Y1,Z1],[X0,Y1,Z1],
@@ -259,21 +362,9 @@ function makeTextSprite(text, fontSize = 28) {
   return sprite
 }
 
-// Determine which edges to place ticks on based on current camera position.
-// Returns { lEdge, hPlane, bEdge, aEdge }.
-//
-// lEdge  — index into V_EDGES for L* ticks: the leftmost vertical edge in NDC.
-// hPlane — Y coordinate of the horizontal plane for a*/b* ticks:
-//   L*=0 when camera is above it (camera.y ≥ 0), L*=100 when camera is below.
-//   With inward normals, both planes are simultaneously visible when the camera
-//   is between them (0 < y < 100) — the user's rule is to use L*=0 in that case,
-//   which this implements.
-// bEdge  — Z coordinate of the closer b*-axis edge (Z=±128).
-// aEdge  — X coordinate of the closer a*-axis edge (X=±128).
 function computeTickState() {
   const cp = camera.position
 
-  // Leftmost vertical edge in screen space
   let minNdcX = Infinity, lEdge = 0
   for (let i = 0; i < V_EDGES.length; i++) {
     const ndc = new THREE.Vector3(V_EDGES[i].x, 50, V_EDGES[i].z).project(camera)
@@ -299,11 +390,10 @@ function buildTickGroup(state) {
   const tPts = []
 
   const ve   = V_EDGES[state.lEdge]
-  const hDy  = state.hPlane === Y0 ? -1 : 1    // outward Y from horizontal plane
-  const bDz  = state.bEdge === Z1  ?  1 : -1   // outward Z from b* edge
-  const aDx  = state.aEdge === X0  ? -1 :  1   // outward X from a* edge
+  const hDy  = state.hPlane === Y0 ? -1 : 1
+  const bDz  = state.bEdge === Z1  ?  1 : -1
+  const aDx  = state.aEdge === X0  ? -1 :  1
 
-  // L* ticks on leftmost vertical edge
   for (let l = 0; l <= 100; l += 20) {
     tPts.push(
       new THREE.Vector3(ve.x,            l, ve.z),
@@ -317,7 +407,6 @@ function buildTickGroup(state) {
   ll.position.set(ve.x + ve.dx*32, 50, ve.z + ve.dz*32)
   group.add(ll)
 
-  // b* ticks on closer b*-axis edge of horizontal plane
   for (let b = -100; b <= 100; b += 20) {
     tPts.push(
       new THREE.Vector3(b, state.hPlane,          state.bEdge),
@@ -331,7 +420,6 @@ function buildTickGroup(state) {
   lb.position.set(0, state.hPlane + hDy*26, state.bEdge + bDz*26)
   group.add(lb)
 
-  // a* ticks on closer a*-axis edge of horizontal plane
   for (let a = -100; a <= 100; a += 20) {
     tPts.push(
       new THREE.Vector3(state.aEdge,         state.hPlane,          a),
@@ -370,20 +458,20 @@ function updateTicks() {
   scene.add(tickGroup)
 }
 
-// Sort transparent gamut meshes so the one with the furthest near-surface is
-// drawn first (back-to-front). Resolves ordering for nested gamuts where both
-// bounding-sphere centres are at the same position — the smaller (inner) gamut
-// has a larger (centre_dist − radius) and must render before the outer shell.
 function updateRenderOrder() {
   if (!camera || meshMap.size < 2) return
   const entries = []
-  for (const [, { mesh }] of meshMap) {
-    if (!mesh.geometry.boundingSphere) mesh.geometry.computeBoundingSphere()
-    const dist = camera.position.distanceTo(mesh.geometry.boundingSphere.center)
-    entries.push({ mesh, nearDist: dist - mesh.geometry.boundingSphere.radius })
+  for (const [, entry] of meshMap) {
+    const geo = entry.solidGeo
+    if (!geo.boundingSphere) geo.computeBoundingSphere()
+    const dist = camera.position.distanceTo(geo.boundingSphere.center)
+    entries.push({ entry, nearDist: dist - geo.boundingSphere.radius })
   }
-  entries.sort((a, b) => b.nearDist - a.nearDist)   // furthest surface first
-  entries.forEach((e, i) => { e.mesh.renderOrder = i })
+  entries.sort((a, b) => b.nearDist - a.nearDist)
+  entries.forEach(({ entry }, i) => {
+    entry.solidMesh.renderOrder = i
+    entry.edgesMesh.renderOrder = i
+  })
 }
 
 // ── Lifecycle ───────────────────────────────────────────────────────────────
@@ -424,11 +512,22 @@ onMounted(() => {
   controls.dampingFactor = 0.08
   controls.update()
 
-  // Apply initial projection blend (handles persisted non-default values).
+  // Apply stored camera angle (overrides the hardcoded initial position above).
+  setCameraFromAngles(props.cameraElev, props.cameraAzim)
+
+  // Apply initial projection blend.
   applyPerspectiveBlend(props.perspectiveBlend)
 
-  // Rebuild ticks and re-sort gamut render order whenever the camera moves.
-  controls.addEventListener('change', () => { updateTicks(); updateRenderOrder() })
+  controls.addEventListener('change', () => {
+    updateTicks()
+    updateRenderOrder()
+    const angles = getCameraAngles()
+    if (angles) {
+      lastEmittedElev = angles.elev
+      lastEmittedAzim = angles.azim
+      emit('camera-change', angles)
+    }
+  })
 
   ro = new ResizeObserver(entries => {
     const { width, height } = entries[0].contentRect
@@ -448,8 +547,6 @@ onMounted(() => {
   function animate() {
     animId = requestAnimationFrame(animate)
     controls.update()
-    // Keep near/far surrounding the scene. For perspective, critical at low blend
-    // (camera far back). For ortho, near can be negative (objects behind camera ok).
     {
       const dist = camera.position.distanceTo(controls.target)
       const near = (camera === orthoCamera) ? dist - 400 : Math.max(0.1, dist - 300)
@@ -464,7 +561,6 @@ onMounted(() => {
   }
   animate()
 
-  // Initial tick placement once camera matrices are valid.
   camera.updateMatrixWorld()
   updateTicks()
 
@@ -472,7 +568,8 @@ onMounted(() => {
 })
 
 watch(
-  () => props.gamuts.map(g => `${g.id}:${g.colour}:${g.visible}:${g.alpha}:${!!g.surface}`).join('|'),
+  () => props.gamuts.map(g =>
+    `${g.id}:${g.visible}:${g.alpha}:${g.wireframe}:${!!g.surface}`).join('|'),
   () => { if (scene) syncMeshes(props.gamuts) },
 )
 
@@ -481,13 +578,50 @@ watch(
   (blend) => { if (perspCamera && controls) applyPerspectiveBlend(blend) },
 )
 
+// When camera angles are changed from outside (panel inputs), reposition the
+// camera. Guard skips the update if the values match what we just emitted from
+// an orbit event, preventing the prop-watch feedback loop.
+watch(
+  () => [props.cameraElev, props.cameraAzim],
+  ([elev, azim]) => {
+    if (!camera || !controls) return
+    if (lastEmittedElev !== null &&
+        Math.abs(elev - lastEmittedElev) < 1 &&
+        Math.abs(azim - lastEmittedAzim) < 1) return
+    setCameraFromAngles(elev, azim)
+  },
+)
+
+// Rebuild all geometries when the colour space changes (future: display-p3 toggle).
+watch(
+  () => props.colourSpace,
+  () => {
+    if (!scene) return
+    for (const { solidMesh, edgesMesh, solidGeo, edgesGeo, solidMat, edgesMat } of meshMap.values()) {
+      scene.remove(solidMesh)
+      scene.remove(edgesMesh)
+      solidGeo.dispose()
+      edgesGeo.dispose()
+      solidMat.dispose()
+      edgesMat.dispose()
+    }
+    meshMap.clear()
+    syncMeshes(props.gamuts)
+  },
+)
+
 onUnmounted(() => {
   cancelAnimationFrame(animId)
   ro?.disconnect()
-  controls?.dispose()  // disposes all 'change' listeners
+  controls?.dispose()
   disposeGroup(axisGroup)
   disposeGroup(tickGroup)
-  for (const { geo, mat } of meshMap.values()) { geo.dispose(); mat.dispose() }
+  for (const { solidGeo, edgesGeo, solidMat, edgesMat } of meshMap.values()) {
+    solidGeo.dispose()
+    edgesGeo.dispose()
+    solidMat.dispose()
+    edgesMat.dispose()
+  }
   meshMap.clear()
   renderer?.dispose()
 })
