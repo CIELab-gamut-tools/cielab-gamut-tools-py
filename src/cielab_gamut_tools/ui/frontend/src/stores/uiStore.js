@@ -56,6 +56,10 @@ export const useUiStore = defineStore('ui', {
       dpi: 150,
     },
     ringsRenderCounter: 0,
+    analysisOptions: {
+      dutIds: [],
+      refIds: [],
+    },
     surfaceOptions: {
       perGamut: {},            // id → { visible, alpha, wireframe, chroma, lightness, edgeColour }
       perspectiveBlend: 1,     // 0 = isometric, 1 = perspective
@@ -93,7 +97,35 @@ export const useUiStore = defineStore('ui', {
       this.surfaceOptions.cameraElev = Math.round(Math.max(-90, Math.min(90, elev)))
       this.surfaceOptions.cameraAzim = Math.round(azim)
     },
+
+    // Analysis selection — independent of render selection
+    setAnalysisDut(id, val) {
+      if (val && !this.analysisOptions.dutIds.includes(id)) {
+        this.analysisOptions.dutIds.push(id)
+      } else if (!val) {
+        this.analysisOptions.dutIds = this.analysisOptions.dutIds.filter(x => x !== id)
+      }
+    },
+    setAnalysisRef(id, val) {
+      if (val && !this.analysisOptions.refIds.includes(id)) {
+        this.analysisOptions.refIds.push(id)
+      } else if (!val) {
+        this.analysisOptions.refIds = this.analysisOptions.refIds.filter(x => x !== id)
+      }
+    },
+    initAnalysisGamut(id) {
+      this.setAnalysisDut(id, true)
+      this.setAnalysisRef(id, true)
+    },
+    removeAnalysisGamut(id) {
+      this.analysisOptions.dutIds = this.analysisOptions.dutIds.filter(x => x !== id)
+      this.analysisOptions.refIds = this.analysisOptions.refIds.filter(x => x !== id)
+    },
   },
 
-  persist: true,
+  // analysisOptions is intentionally excluded — gamut IDs change on every server
+  // restart so persisting them is meaningless; fresh state is always correct.
+  persist: {
+    pick: ['activeView', 'exportOptions', 'ringsOptions', 'ringsRenderCounter', 'surfaceOptions'],
+  },
 })

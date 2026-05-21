@@ -3,9 +3,14 @@
          v-bind="dropHandlers">
     <div class="gamut-sidebar__header">
       <span class="gamut-sidebar__title">Gamuts</span>
-      <button class="gamut-sidebar__add" title="Add gamut" @click="showAdd = true">
-        <i class="pi pi-plus" />
-      </button>
+      <div class="gamut-sidebar__header-btns">
+        <button class="gamut-sidebar__hbtn" title="Load CGATS file" @click="showUpload = true">
+          <i class="pi pi-folder-open" />
+        </button>
+        <button class="gamut-sidebar__hbtn" title="New synthetic gamut" @click="showAdd = true">
+          <i class="pi pi-plus" />
+        </button>
+      </div>
     </div>
 
     <div class="gamut-sidebar__list-area">
@@ -38,6 +43,7 @@
     <SurfacePropertiesPanel />
   </aside>
 
+  <UploadGamutModal v-model="showUpload" />
   <AddGamutModal v-model="showAdd" />
 </template>
 
@@ -46,6 +52,7 @@ import { ref, onMounted } from 'vue'
 import { useGamutStore } from '../stores/gamutStore.js'
 import GamutItem from './GamutItem.vue'
 import AddGamutModal from './AddGamutModal.vue'
+import UploadGamutModal from './UploadGamutModal.vue'
 import RingsPropertiesPanel from './RingsPropertiesPanel.vue'
 import SurfacePropertiesPanel from './SurfacePropertiesPanel.vue'
 import { useFileDrop } from '../composables/useFileDrop.js'
@@ -53,7 +60,8 @@ import { useFileDrop } from '../composables/useFileDrop.js'
 const gamuts = useGamutStore()
 const loading = ref(false)
 const fetchError = ref(null)
-const showAdd = ref(false)
+const showAdd    = ref(false)
+const showUpload = ref(false)
 
 const { isDragging, isUploading, error: dropError, dropHandlers } = useFileDrop(entry => {
   gamuts.add(entry)
@@ -100,7 +108,12 @@ onMounted(async () => {
   color: var(--p-text-muted-color);
 }
 
-.gamut-sidebar__add {
+.gamut-sidebar__header-btns {
+  display: flex;
+  gap: 3px;
+}
+
+.gamut-sidebar__hbtn {
   width: 22px;
   height: 22px;
   border: 1px solid var(--p-surface-300);
@@ -114,7 +127,7 @@ onMounted(async () => {
   color: var(--p-text-muted-color);
 }
 
-.gamut-sidebar__add:hover {
+.gamut-sidebar__hbtn:hover {
   border-color: var(--p-primary-400);
   color: var(--p-primary-500);
 }

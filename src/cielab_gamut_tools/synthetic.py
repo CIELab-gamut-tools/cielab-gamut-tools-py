@@ -84,6 +84,8 @@ class SyntheticGamut:
         white_xy: NDArray[np.floating],
         gamma: float | Callable[[NDArray[np.floating]], NDArray[np.floating]] = 2.2,
         title: str | None = None,
+        clowlo: float = 1.0,
+        boost_fn: str = "min",
     ) -> None:
         """
         Create a synthetic gamut from primaries and white point.
@@ -97,11 +99,18 @@ class SyntheticGamut:
                 linear values (e.g. :func:`srgb_gamma` for the sRGB piecewise
                 transfer function).  Defaults to ``2.2``.
             title: Human-readable gamut name shown in plot titles.
+            clowlo: CLO/WLO ratio for white-boosted (RGBW) displays.  1.0
+                means no boost (standard RGB display).  Range [0.25, 1.0].
+            boost_fn: How the W channel is derived from linear RGB values.
+                ``"min"`` (conservative — only neutral tones affected),
+                ``"median"``, or ``"max"`` (aggressive — all colours affected).
         """
         self.primaries_xy = np.asarray(primaries_xy)
         self.white_xy = np.asarray(white_xy)
         self.gamma = gamma
         self.title = title
+        self.clowlo = float(clowlo)
+        self.boost_fn = boost_fn
 
         self._gamut: "Gamut | None" = None
 
@@ -142,19 +151,33 @@ class SyntheticGamut:
         from cielab_gamut_tools.colorspace.lab import xyz_to_lab
         from cielab_gamut_tools.geometry.tesselation import make_tesselation
 
-        # Generate RGB cube tesselation
         triangles, rgb_surface = make_tesselation()
 
-        # Convert RGB to XYZ using primaries and white point (source colorspace)
-        xyz_surface = self._rgb_to_xyz(rgb_surface)
+        # Apply gamma to get linear RGB
+        if callable(self.gamma):
+            rgb_linear = self.gamma(rgb_surface)
+        else:
+            rgb_linear = np.power(rgb_surface, self.gamma)
 
-        # Chromatic adaptation to D50
+        M = _build_rgb_to_xyz_matrix(self.primaries_xy, self.white_xy)
+        xyz_surface = rgb_linear @ M.T
+
+        if self.clowlo < 1.0:
+            # White boost: W = k * fn(r, g, b) in linear light; normalize to peak white.
+            # Peak white including W channel is (1+k) × white_xyz, so divide by (1+k).
+            k = 1.0 / self.clowlo - 1.0
+            if self.boost_fn == "median":
+                fn_val = np.median(rgb_linear, axis=1)
+            elif self.boost_fn == "max":
+                fn_val = np.max(rgb_linear, axis=1)
+            else:
+                fn_val = np.min(rgb_linear, axis=1)
+            white_xyz = np.array([1.0, 1.0, 1.0]) @ M.T
+            xyz_surface = (xyz_surface + k * fn_val[:, None] * white_xyz[None, :]) / (1.0 + k)
+
         xyz_d50 = adapt_d65_to_d50(xyz_surface, source_white=self.white_xy)
-
-        # Convert to CIELab
         lab = xyz_to_lab(xyz_d50)
 
-        # Store source-space XYZ alongside Lab for export and future analyses
         return Gamut(lab, triangles, rgb=rgb_surface, xyz=xyz_surface, title=self.title)
 
     def _rgb_to_xyz(self, rgb: NDArray[np.floating]) -> NDArray[np.floating]:

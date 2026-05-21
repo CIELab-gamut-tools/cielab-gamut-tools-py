@@ -37,6 +37,10 @@ export async function deleteGamut(id) {
   await req('DELETE', `/gamuts/${id}`)
 }
 
+export async function renameGamut(id, name) {
+  return (await req('PATCH', `/gamuts/${id}`, { name })).json()
+}
+
 export async function getVolume(id) {
   return (await req('GET', `/gamuts/${id}/volume`)).json()
 }

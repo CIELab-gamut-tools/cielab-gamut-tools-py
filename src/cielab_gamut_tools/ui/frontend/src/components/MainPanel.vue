@@ -14,7 +14,7 @@
           <SurfaceView />
         </TabPanel>
         <TabPanel value="analysis">
-          <div class="main-panel__placeholder">Analysis view — coming in Stage 6</div>
+          <AnalysisView />
         </TabPanel>
       </TabPanels>
     </Tabs>
@@ -46,6 +46,7 @@ import { useGamutStore } from '../stores/gamutStore.js'
 import { useSelectionStore } from '../stores/selectionStore.js'
 import RingsView from './RingsView.vue'
 import SurfaceView from './SurfaceView.vue'
+import AnalysisView from './AnalysisView.vue'
 import { useFileDrop } from '../composables/useFileDrop.js'
 
 const ui = useUiStore()
@@ -153,14 +154,5 @@ const { isDragging, isUploading, error: dropError, dropHandlers } = useFileDrop(
 
 :deep(.p-tabpanel.p-tabpanel-active) {
   display: flex;
-}
-
-.main-panel__placeholder {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  color: var(--p-text-muted-color);
-  font-size: 0.875rem;
 }
 </style>

@@ -211,12 +211,15 @@ and full test coverage in `tests/test_ui_server.py`. All tests pass.
 
 ---
 
-## Stage 6 — Analysis view
+## Stage 6 — Analysis view ✓ COMPLETE
 
-- `VolumeTable`: all loaded gamuts, volume column, sortable
-- `CoverageMatrix`: DUT rows × reference columns, calls `POST /api/gamuts/matrix`
-- Client-side CSV export of table
-- Copy-to-clipboard for individual cells
+- `VolumeTable`: all loaded gamuts, volume column, sortable by Name/Source/Volume ✓
+- `CoverageMatrix`: full NxN pairwise coverage matrix, calls `POST /api/gamuts/matrix` ✓
+- Client-side CSV export for both tables ✓
+- Copy-to-clipboard for individual cells (click volume or matrix cell) ✓
+- Heat-map cell backgrounds (row gamut colour × coverage opacity) ✓
+- Auto-recomputes when gamuts change; lazy — only fetches while Analysis tab is active ✓
+- Staleness guard: re-navigation to the tab without gamut changes does not refetch ✓
 
 ---
 

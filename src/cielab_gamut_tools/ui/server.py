@@ -167,6 +167,8 @@ class SyntheticRequest(BaseModel):
     white_xy: list[float]  # [x, y]
     gamma: float = 2.2
     name: str | None = None
+    clowlo: float = 1.0
+    boost_fn: str = "min"
 
 
 @app.post("/api/gamuts/synthetic", status_code=201)
@@ -176,12 +178,32 @@ def create_synthetic(req: SyntheticRequest) -> dict:  # type: ignore[type-arg]
             np.array(req.primaries_xy),
             np.array(req.white_xy),
             gamma=req.gamma,
+            clowlo=req.clowlo,
+            boost_fn=req.boost_fn,
         )
         gamut = sg.gamut
     except Exception as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     entry = _add_entry(req.name or "Custom gamut", "synthetic", gamut)
+    return _entry_dict(entry)
+
+
+# ---------------------------------------------------------------------------
+# Rename gamut
+# ---------------------------------------------------------------------------
+
+
+class RenameRequest(BaseModel):
+    name: str
+
+
+@app.patch("/api/gamuts/{gamut_id}", status_code=200)
+def rename_gamut(gamut_id: str, req: RenameRequest) -> dict:  # type: ignore[type-arg]
+    entry = _registry.get(gamut_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Gamut not found")
+    entry.name = req.name.strip() or entry.name
     return _entry_dict(entry)
 
 
