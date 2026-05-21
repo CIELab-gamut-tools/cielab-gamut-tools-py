@@ -296,6 +296,8 @@ onUnmounted(() => {
 .add-modal__synth-body {
   display: flex;
   gap: 1rem;
+  height: min(calc(90vh - 140px), 600px);
+  align-items: stretch;
 }
 
 .add-modal__synth-left {
@@ -304,6 +306,7 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
+  overflow: hidden;
 }
 
 .add-modal__synth-right {
@@ -370,8 +373,8 @@ onUnmounted(() => {
 
 .add-modal__diag {
   width: 100%;
-  aspect-ratio: 84 / 96;
-  flex-shrink: 0;
+  flex: 1 1 0;
+  min-height: 0;
   border: 1px solid var(--p-surface-200);
   border-radius: 6px;
   background: var(--p-surface-0);
@@ -438,7 +441,7 @@ onUnmounted(() => {
 
 .add-modal__preview-canvas {
   flex: 1;
-  min-height: 360px;
+  min-height: 0;
   border: 1px solid var(--p-surface-200);
   border-radius: 6px;
   background: var(--p-surface-0);
