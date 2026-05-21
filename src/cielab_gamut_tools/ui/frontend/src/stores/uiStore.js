@@ -1,5 +1,22 @@
 import { defineStore } from 'pinia'
 
+// Default per-gamut surface options — used when a gamut has no stored state.
+function pgDefaults() {
+  return {
+    visible:    true,
+    alpha:      0.75,
+    wireframe:  false,
+    chroma:     1.0,   // a*/b* scale before Lab→RGB (0=grey, 1=natural, >1=saturated)
+    lightness:  null,  // L* override before Lab→RGB; null = use actual per-vertex L*
+    edgeColour: null,  // fixed wireframe edge colour (#rrggbb); null = Lab-derived
+  }
+}
+
+// Merge a partial patch onto stored (or default) per-gamut state.
+function patchPg(state, id, patch) {
+  state.surfaceOptions.perGamut[id] = { ...pgDefaults(), ...state.surfaceOptions.perGamut[id], ...patch }
+}
+
 export const useUiStore = defineStore('ui', {
   state: () => ({
     activeView: 'rings',
@@ -40,9 +57,9 @@ export const useUiStore = defineStore('ui', {
     },
     ringsRenderCounter: 0,
     surfaceOptions: {
-      perGamut: {},            // id → { visible: bool, alpha: number, wireframe: bool }
+      perGamut: {},            // id → { visible, alpha, wireframe, chroma, lightness, edgeColour }
       perspectiveBlend: 1,     // 0 = isometric, 1 = perspective
-      cameraElev: 12,          // degrees above horizontal plane (−85…85)
+      cameraElev: 12,          // degrees above horizontal plane (−90…90)
       cameraAzim: 9,           // degrees around L* axis, from +a* (−180…180)
       colourSpace: 'srgb',     // 'srgb' | 'display-p3' — hook for wide-gamut rendering
     },
@@ -61,18 +78,14 @@ export const useUiStore = defineStore('ui', {
     forceRender() {
       this.ringsRenderCounter++
     },
-    setSurfaceVisible(id, visible) {
-      const cur = this.surfaceOptions.perGamut[id]
-      this.surfaceOptions.perGamut[id] = { visible, alpha: cur?.alpha ?? 0.75, wireframe: cur?.wireframe ?? false }
-    },
-    setSurfaceAlpha(id, alpha) {
-      const cur = this.surfaceOptions.perGamut[id]
-      this.surfaceOptions.perGamut[id] = { visible: cur?.visible ?? true, alpha, wireframe: cur?.wireframe ?? false }
-    },
-    setSurfaceWireframe(id, wireframe) {
-      const cur = this.surfaceOptions.perGamut[id]
-      this.surfaceOptions.perGamut[id] = { visible: cur?.visible ?? true, alpha: cur?.alpha ?? 0.75, wireframe }
-    },
+
+    setSurfaceVisible(id, visible)       { patchPg(this, id, { visible }) },
+    setSurfaceAlpha(id, alpha)           { patchPg(this, id, { alpha }) },
+    setSurfaceWireframe(id, wireframe)   { patchPg(this, id, { wireframe }) },
+    setSurfaceChroma(id, chroma)         { patchPg(this, id, { chroma }) },
+    setSurfaceLightness(id, lightness)   { patchPg(this, id, { lightness }) },
+    setSurfaceEdgeColour(id, edgeColour) { patchPg(this, id, { edgeColour }) },
+
     setSurfacePerspective(blend) {
       this.surfaceOptions.perspectiveBlend = Math.max(0, Math.min(1, blend))
     },

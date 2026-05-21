@@ -9,7 +9,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { labVerticesToColors } from '../gamut/labToRgb.js'
 
 const props = defineProps({
-  // Array of { id, colour, surface: {vertices, faces} | null, visible, alpha, wireframe }
+  // Array of { id, colour, surface, visible, alpha, wireframe, chroma, lightness, edgeColour }
   gamuts: { type: Array, default: () => [] },
   // 0 = isometric (narrow FOV), 1 = perspective (normal FOV)
   perspectiveBlend: { type: Number, default: 1 },
@@ -149,7 +149,7 @@ function setCameraFromAngles(elev, azim) {
 // vertices: [[L*, a*, b*], …] → Three.js [b*, L*, a*] (X, Y, Z)
 // Vertex colours are computed from Lab values using the current colourSpace.
 
-function buildGeometry({ vertices, faces }, colourSpace) {
+function buildGeometry({ vertices, faces }, colourSpace, chroma = 1.0, lightness = null) {
   const n = vertices.length
   const positions = new Float32Array(n * 3)
   for (let i = 0; i < n; i++) {
@@ -168,7 +168,7 @@ function buildGeometry({ vertices, faces }, colourSpace) {
     flatIdx[i * 3 + 1] = faces[i][2]
     flatIdx[i * 3 + 2] = faces[i][1]
   }
-  const colors = labVerticesToColors(vertices, colourSpace)
+  const colors = labVerticesToColors(vertices, colourSpace, chroma, lightness)
 
   const geo = new THREE.BufferGeometry()
   geo.setAttribute('position', new THREE.BufferAttribute(positions, 3))
@@ -180,6 +180,8 @@ function buildGeometry({ vertices, faces }, colourSpace) {
 
 // Build a LineSegments geometry for wireframe rendering, carrying vertex colours
 // derived from the solid geometry's indexed faces.
+// Returns { geo, vertIndices } — vertIndices is kept in meshMap so edge colours
+// can be updated in-place without rebuilding positions.
 function buildEdgesGeometry(solidGeo) {
   const index  = solidGeo.index.array
   const srcPos = solidGeo.attributes.position
@@ -188,23 +190,23 @@ function buildEdgesGeometry(solidGeo) {
 
   // Collect unique undirected edges.
   const seen = new Set()
-  const edgeVerts = []   // pairs of original vertex indices
+  const vertIndices = []   // flat list: [u0, v0, u1, v1, …]
   for (let i = 0; i < n; i += 3) {
     const a = index[i], b = index[i + 1], c = index[i + 2]
     for (const [u, v] of [[a, b], [b, c], [c, a]]) {
       const key = u < v ? u * 65536 + v : v * 65536 + u
       if (!seen.has(key)) {
         seen.add(key)
-        edgeVerts.push(u, v)
+        vertIndices.push(u, v)
       }
     }
   }
 
-  const ne = edgeVerts.length
+  const ne = vertIndices.length
   const positions = new Float32Array(ne * 3)
   const colors    = new Float32Array(ne * 3)
   for (let i = 0; i < ne; i++) {
-    const vi = edgeVerts[i]
+    const vi = vertIndices[i]
     positions[i * 3]     = srcPos.getX(vi)
     positions[i * 3 + 1] = srcPos.getY(vi)
     positions[i * 3 + 2] = srcPos.getZ(vi)
@@ -216,7 +218,34 @@ function buildEdgesGeometry(solidGeo) {
   const geo = new THREE.BufferGeometry()
   geo.setAttribute('position', new THREE.BufferAttribute(positions, 3))
   geo.setAttribute('color',    new THREE.BufferAttribute(colors, 3))
-  return geo
+  return { geo, vertIndices }
+}
+
+// Copy Lab-derived colours from the solid geometry into the edge geometry,
+// using the stored vertex index list.
+function updateEdgeColorsFromSolid(edgesGeo, solidGeo, vertIndices) {
+  const srcCol = solidGeo.attributes.color
+  const arr    = edgesGeo.attributes.color.array
+  for (let i = 0; i < vertIndices.length; i++) {
+    const vi = vertIndices[i]
+    arr[i * 3]     = srcCol.getX(vi)
+    arr[i * 3 + 1] = srcCol.getY(vi)
+    arr[i * 3 + 2] = srcCol.getZ(vi)
+  }
+  edgesGeo.attributes.color.needsUpdate = true
+}
+
+// Fill the edge geometry colour buffer with a single flat colour.
+function fillEdgeColour(edgesGeo, hexColour) {
+  const c   = new THREE.Color(hexColour)
+  const arr = edgesGeo.attributes.color.array
+  const n   = arr.length / 3
+  for (let i = 0; i < n; i++) {
+    arr[i * 3]     = c.r
+    arr[i * 3 + 1] = c.g
+    arr[i * 3 + 2] = c.b
+  }
+  edgesGeo.attributes.color.needsUpdate = true
 }
 
 function syncMeshes(gamuts) {
@@ -236,24 +265,44 @@ function syncMeshes(gamuts) {
 
   for (const g of gamuts) {
     if (!g.surface) continue
-    const alpha     = g.alpha     ?? 0.75
-    const visible   = g.visible   ?? true
-    const wireframe = g.wireframe ?? false
+    const alpha      = g.alpha      ?? 0.75
+    const visible    = g.visible    ?? true
+    const wireframe  = g.wireframe  ?? false
+    const chroma     = g.chroma     ?? 1.0
+    const lightness  = g.lightness  ?? null
+    const edgeColour = g.edgeColour ?? null
 
     if (meshMap.has(g.id)) {
-      const { solidMesh, edgesMesh, solidMat, edgesMat } = meshMap.get(g.id)
-      solidMat.opacity   = alpha
+      const { solidMesh, edgesMesh, solidGeo, edgesGeo, solidMat, edgesMat, vertIndices } = meshMap.get(g.id)
+
+      // Recompute vertex colours in-place (chroma/lightness/colourSpace may have changed).
+      const newColors = labVerticesToColors(g.surface.vertices, props.colourSpace, chroma, lightness)
+      solidGeo.attributes.color.set(newColors)
+      solidGeo.attributes.color.needsUpdate = true
+
+      // Propagate to edges — either Lab-derived or a flat override.
+      if (edgeColour) {
+        fillEdgeColour(edgesGeo, edgeColour)
+      } else {
+        updateEdgeColorsFromSolid(edgesGeo, solidGeo, vertIndices)
+      }
+
+      solidMat.opacity     = alpha
       solidMat.transparent = alpha < 1.0
       solidMat.depthWrite  = alpha >= 1.0
       solidMat.needsUpdate = true
       edgesMat.opacity     = alpha
       edgesMat.transparent = alpha < 1.0
       edgesMat.needsUpdate = true
-      solidMesh.visible  = !wireframe && visible
-      edgesMesh.visible  =  wireframe && visible
+
+      solidMesh.visible = !wireframe && visible
+      edgesMesh.visible =  wireframe && visible
     } else {
-      const solidGeo = buildGeometry(g.surface, props.colourSpace)
-      const edgesGeo = buildEdgesGeometry(solidGeo)
+      const solidGeo = buildGeometry(g.surface, props.colourSpace, chroma, lightness)
+      const { geo: edgesGeo, vertIndices } = buildEdgesGeometry(solidGeo)
+
+      if (edgeColour) fillEdgeColour(edgesGeo, edgeColour)
+
       const solidMat = new THREE.MeshPhongMaterial({
         vertexColors: true,
         color: 0xffffff,   // white so vertex colours are unmodulated
@@ -274,7 +323,7 @@ function syncMeshes(gamuts) {
       edgesMesh.visible =  wireframe && visible
       scene.add(solidMesh)
       scene.add(edgesMesh)
-      meshMap.set(g.id, { solidMesh, edgesMesh, solidGeo, edgesGeo, solidMat, edgesMat })
+      meshMap.set(g.id, { solidMesh, edgesMesh, solidGeo, edgesGeo, solidMat, edgesMat, vertIndices })
     }
   }
   updateRenderOrder()
@@ -577,7 +626,8 @@ onMounted(() => {
 
 watch(
   () => props.gamuts.map(g =>
-    `${g.id}:${g.visible}:${g.alpha}:${g.wireframe}:${!!g.surface}`).join('|'),
+    `${g.id}:${g.visible}:${g.alpha}:${g.wireframe}:${g.chroma}:${g.lightness}:${g.edgeColour}:${!!g.surface}`
+  ).join('|'),
   () => { if (scene) syncMeshes(props.gamuts) },
 )
 

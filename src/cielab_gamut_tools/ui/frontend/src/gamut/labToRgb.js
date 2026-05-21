@@ -65,14 +65,17 @@ function gammaEncode(c) {
 
 /**
  * Convert a single CIELab value to [r, g, b] in [0, 1], clipped at gamut boundary.
- * @param {number} L - L* (0–100)
- * @param {number} a - a* (approx –128–128)
- * @param {number} b - b* (approx –128–128)
+ * @param {number} L       - L* (0–100)
+ * @param {number} a       - a* (approx –128–128)
+ * @param {number} b       - b* (approx –128–128)
  * @param {string} colourSpace - 'srgb' (default) | 'display-p3'
+ * @param {number} chroma  - scale factor for a* and b* before conversion (default 1.0)
+ * @param {number|null} lightness - override L* before conversion; null = use actual L*
  * @returns {number[]} [r, g, b] each in [0, 1]
  */
-export function labToRgb(L, a, b, colourSpace = 'srgb') {
-  const xyz50 = labToXyz(L, a, b)
+export function labToRgb(L, a, b, colourSpace = 'srgb', chroma = 1.0, lightness = null) {
+  const Leff = lightness ?? L
+  const xyz50 = labToXyz(Leff, a * chroma, b * chroma)
   const xyz65 = mat3Mul(M_D50_TO_D65, xyz50)
   const linear = mat3Mul(M_TO_LINEAR[colourSpace] ?? M_TO_LINEAR.srgb, xyz65)
   return linear.map(c => Math.max(0, Math.min(1, gammaEncode(c))))
@@ -80,15 +83,20 @@ export function labToRgb(L, a, b, colourSpace = 'srgb') {
 
 /**
  * Build a Float32Array of per-vertex RGB colours from a Lab vertex array.
- * @param {Array<number[]>} vertices - [[L, a, b], …]
- * @param {string} colourSpace - passed to labToRgb
+ * @param {Array<number[]>} vertices  - [[L, a, b], …]
+ * @param {string} colourSpace        - passed to labToRgb
+ * @param {number} chroma             - a* and b* scale factor (default 1.0)
+ * @param {number|null} lightness     - L* override, null = per-vertex L* (default)
  * @returns {Float32Array} interleaved [r,g,b, r,g,b, …]
  */
-export function labVerticesToColors(vertices, colourSpace = 'srgb') {
+export function labVerticesToColors(vertices, colourSpace = 'srgb', chroma = 1.0, lightness = null) {
   const n = vertices.length
   const colors = new Float32Array(n * 3)
   for (let i = 0; i < n; i++) {
-    const [r, g, b] = labToRgb(vertices[i][0], vertices[i][1], vertices[i][2], colourSpace)
+    const [r, g, b] = labToRgb(
+      vertices[i][0], vertices[i][1], vertices[i][2],
+      colourSpace, chroma, lightness,
+    )
     colors[i * 3]     = r
     colors[i * 3 + 1] = g
     colors[i * 3 + 2] = b

@@ -65,11 +65,14 @@ const activeGamuts = computed(() =>
       const opts = ui.surfaceOptions.perGamut[id]
       return {
         id,
-        colour: g.colour,
-        surface: g.surface,
-        visible:   opts?.visible   ?? true,
-        alpha:     opts?.alpha     ?? 0.75,
-        wireframe: opts?.wireframe ?? false,
+        colour:     g.colour,
+        surface:    g.surface,
+        visible:    opts?.visible    ?? true,
+        alpha:      opts?.alpha      ?? 0.75,
+        wireframe:  opts?.wireframe  ?? false,
+        chroma:     opts?.chroma     ?? 1.0,
+        lightness:  opts?.lightness  ?? null,
+        edgeColour: opts?.edgeColour ?? null,
       }
     })
     .filter(Boolean),
