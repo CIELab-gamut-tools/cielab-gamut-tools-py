@@ -17,6 +17,8 @@ const props = defineProps({
   cameraElev: { type: Number, default: 12 },
   // Degrees around the L* axis from +a* direction — syncs with the panel inputs
   cameraAzim: { type: Number, default: 9 },
+  // Distance from camera to orbit target — syncs with the panel inputs
+  cameraDistance: { type: Number, default: 331 },
   // Colour space for Lab→RGB vertex colour conversion ('srgb' | 'display-p3')
   colourSpace: { type: String, default: 'srgb' },
 })
@@ -32,9 +34,10 @@ let axisGroup = null
 let tickGroup  = null
 let currentTickState = null
 
-// Tracks the last angles we emitted so we can break the prop-watch feedback loop.
+// Tracks the last camera state we emitted so we can break the prop-watch feedback loop.
 let lastEmittedElev = null
 let lastEmittedAzim = null
+let lastEmittedDist = null
 
 // ── Projection blend — perspective (blend>0) ↔ true isometric (blend=0) ─────
 const FOV_PERSPECTIVE = 45   // degrees at blend=1; FOV = 45*blend for blend>0
@@ -122,10 +125,11 @@ function getCameraAngles() {
   return {
     elev: Math.round(90 - sp.phi * 180 / Math.PI),
     azim: Math.round(azim),
+    dist: Math.round(sp.radius),
   }
 }
 
-function setCameraFromAngles(elev, azim) {
+function setCameraFromAngles(elev, azim, dist = null) {
   if (!controls || !camera) return
   const sp = new THREE.Spherical()
   const rel = new THREE.Vector3().subVectors(camera.position, controls.target)
@@ -136,6 +140,7 @@ function setCameraFromAngles(elev, azim) {
   const EPS = 1e-4
   sp.phi   = Math.max(EPS, Math.min(Math.PI - EPS, (90 - elev) * Math.PI / 180))
   sp.theta = azim * Math.PI / 180
+  if (dist !== null) sp.radius = dist
   camera.position.copy(
     new THREE.Vector3().setFromSpherical(sp).add(controls.target)
   )
@@ -273,12 +278,30 @@ function syncMeshes(gamuts) {
     const edgeColour = g.edgeColour ?? null
 
     if (meshMap.has(g.id)) {
-      const { solidMesh, edgesMesh, solidGeo, edgesGeo, solidMat, edgesMat, vertIndices } = meshMap.get(g.id)
+      const entry = meshMap.get(g.id)
+      const { solidMesh, edgesMesh, solidMat, edgesMat } = entry
+      let { solidGeo, edgesGeo, vertIndices } = entry
 
-      // Recompute vertex colours in-place (chroma/lightness/colourSpace may have changed).
-      const newColors = labVerticesToColors(g.surface.vertices, props.colourSpace, chroma, lightness)
-      solidGeo.attributes.color.set(newColors)
-      solidGeo.attributes.color.needsUpdate = true
+      if (entry.surface !== g.surface) {
+        // Surface geometry changed — dispose old and rebuild.
+        entry.solidGeo.dispose()
+        entry.edgesGeo.dispose()
+        solidGeo = buildGeometry(g.surface, props.colourSpace, chroma, lightness)
+        const built = buildEdgesGeometry(solidGeo)
+        edgesGeo = built.geo
+        vertIndices = built.vertIndices
+        solidMesh.geometry = solidGeo
+        edgesMesh.geometry = edgesGeo
+        entry.solidGeo    = solidGeo
+        entry.edgesGeo    = edgesGeo
+        entry.vertIndices = vertIndices
+        entry.surface     = g.surface
+      } else {
+        // Recompute vertex colours in-place (chroma/lightness/colourSpace may have changed).
+        const newColors = labVerticesToColors(g.surface.vertices, props.colourSpace, chroma, lightness)
+        solidGeo.attributes.color.set(newColors)
+        solidGeo.attributes.color.needsUpdate = true
+      }
 
       // Propagate to edges — either Lab-derived or a flat override.
       if (edgeColour) {
@@ -323,7 +346,7 @@ function syncMeshes(gamuts) {
       edgesMesh.visible =  wireframe && visible
       scene.add(solidMesh)
       scene.add(edgesMesh)
-      meshMap.set(g.id, { solidMesh, edgesMesh, solidGeo, edgesGeo, solidMat, edgesMat, vertIndices })
+      meshMap.set(g.id, { solidMesh, edgesMesh, solidGeo, edgesGeo, solidMat, edgesMat, vertIndices, surface: g.surface })
     }
   }
   updateRenderOrder()
@@ -569,8 +592,8 @@ onMounted(() => {
   controls.dampingFactor = 0.08
   controls.update()
 
-  // Apply stored camera angle (overrides the hardcoded initial position above).
-  setCameraFromAngles(props.cameraElev, props.cameraAzim)
+  // Apply stored camera angle and distance (overrides the hardcoded initial position above).
+  setCameraFromAngles(props.cameraElev, props.cameraAzim, props.cameraDistance)
 
   // Apply initial projection blend.
   applyPerspectiveBlend(props.perspectiveBlend)
@@ -582,6 +605,7 @@ onMounted(() => {
     if (angles) {
       lastEmittedElev = angles.elev
       lastEmittedAzim = angles.azim
+      lastEmittedDist = angles.dist
       emit('camera-change', angles)
     }
   })
@@ -626,7 +650,7 @@ onMounted(() => {
 
 watch(
   () => props.gamuts.map(g =>
-    `${g.id}:${g.visible}:${g.alpha}:${g.wireframe}:${g.chroma}:${g.lightness}:${g.edgeColour}:${!!g.surface}`
+    `${g.id}:${g.visible}:${g.alpha}:${g.wireframe}:${g.chroma}:${g.lightness}:${g.edgeColour}:${!!g.surface}:${g._sv ?? 0}`
   ).join('|'),
   () => { if (scene) syncMeshes(props.gamuts) },
 )
@@ -640,13 +664,14 @@ watch(
 // camera. Guard skips the update if the values match what we just emitted from
 // an orbit event, preventing the prop-watch feedback loop.
 watch(
-  () => [props.cameraElev, props.cameraAzim],
-  ([elev, azim]) => {
+  () => [props.cameraElev, props.cameraAzim, props.cameraDistance],
+  ([elev, azim, dist]) => {
     if (!camera || !controls) return
     if (lastEmittedElev !== null &&
         Math.abs(elev - lastEmittedElev) < 1 &&
-        Math.abs(azim - lastEmittedAzim) < 1) return
-    setCameraFromAngles(elev, azim)
+        Math.abs(azim - lastEmittedAzim) < 1 &&
+        lastEmittedDist !== null && Math.abs(dist - lastEmittedDist) < 1) return
+    setCameraFromAngles(elev, azim, dist)
   },
 )
 

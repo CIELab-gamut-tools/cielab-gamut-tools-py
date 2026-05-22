@@ -71,43 +71,65 @@
 
         <div class="add-modal__row">
           <label class="add-modal__lbl">CLO/WLO</label>
-          <input class="add-modal__coord" type="number" min="0.25" max="1.0" step="0.01"
+          <input class="add-modal__clowlo-slider" type="range" min="0.25" max="1.0" step="0.01"
+                 :value="clowlo"
+                 @input="clowlo = +$event.target.value" />
+          <input class="add-modal__coord add-modal__clowlo-num" type="number" min="0.25" max="1.0" step="0.01"
                  :value="clowlo"
                  @change="clowlo = Math.max(0.25, Math.min(1.0, +$event.target.value))" />
-          <span class="add-modal__hint">0.25–1.0</span>
         </div>
 
-        <div class="add-modal__row">
-          <label class="add-modal__lbl">Mapping</label>
-          <select class="add-modal__select" v-model="boostFn">
-            <option value="min">min (conservative)</option>
-            <option value="median">median</option>
-            <option value="max">max (aggressive)</option>
-          </select>
-        </div>
 
       </div>
 
       <!-- Right column: live preview -->
       <div class="add-modal__synth-right">
         <div class="add-modal__preview-hdr">
-          <span class="add-modal__preview-title">Preview</span>
+          <div class="add-modal__tabs">
+            <button :class="['add-modal__tab', previewTab === 'rings'   && 'add-modal__tab--active']"
+                    @click="switchTab('rings')">Rings</button>
+            <button :class="['add-modal__tab', previewTab === 'surface' && 'add-modal__tab--active']"
+                    @click="switchTab('surface')">Surface</button>
+          </div>
           <span v-if="previewVolume !== null" class="add-modal__vol">
             {{ Math.round(previewVolume).toLocaleString() }} ΔE³
           </span>
         </div>
 
         <div class="add-modal__preview-canvas">
-          <RingsCanvas v-if="previewGamut" :key="previewKey"
-                       :gamut="previewGamut"
-                       @volume="v => previewVolume = v" />
-          <div v-if="!previewGamut" class="add-modal__preview-empty">
-            <span v-if="synthError" class="add-modal__preview-err">{{ synthError }}</span>
-            <span v-else>Adjust parameters to see a live preview</span>
-          </div>
-          <div v-if="showSpinner" class="add-modal__preview-overlay">
+
+          <!-- Rings tab -->
+          <template v-if="previewTab === 'rings'">
+            <RingsCanvas v-if="previewGamut" :key="previewKey"
+                         :gamut="previewGamut"
+                         @volume="v => previewVolume = v" />
+            <div v-if="!previewGamut" class="add-modal__preview-empty">
+              <span v-if="synthError" class="add-modal__preview-err">{{ synthError }}</span>
+              <span v-else>Adjust parameters to see a live preview</span>
+            </div>
+          </template>
+
+          <!-- Surface tab -->
+          <template v-else>
+            <GamutSurfaceCanvas v-if="previewSurfaceGamuts.length"
+                                :gamuts="previewSurfaceGamuts"
+                                :perspectiveBlend="1"
+                                :cameraElev="surfaceCameraElev"
+                                :cameraAzim="surfaceCameraAzim"
+                                :cameraDistance="surfaceCameraDistance"
+                                @camera-change="e => { surfaceCameraElev = e.elev; surfaceCameraAzim = e.azim; surfaceCameraDistance = e.dist }"
+                                colourSpace="srgb"
+                                class="add-modal__surface-fill" />
+            <div v-else-if="!surfaceLoading" class="add-modal__preview-empty">
+              <span v-if="!previewEntry">Adjust parameters to see a live preview</span>
+            </div>
+          </template>
+
+          <!-- Spinner — synth request or surface fetch -->
+          <div v-if="showSpinner || surfaceLoading" class="add-modal__preview-overlay">
             <i class="pi pi-spin pi-spinner add-modal__spinner-lg" />
           </div>
+
         </div>
       </div>
 
@@ -128,7 +150,8 @@ import Dialog from 'primevue/dialog'
 import Button from 'primevue/button'
 import ChromaticityDiagram from './ChromaticityDiagram.vue'
 import RingsCanvas from './RingsCanvas.vue'
-import { createSynthetic, updateSynthetic, deleteGamut, renameGamut } from '../api.js'
+import GamutSurfaceCanvas from './GamutSurfaceCanvas.vue'
+import { createSynthetic, updateSynthetic, deleteGamut, renameGamut, getSurface } from '../api.js'
 import { unpackCylmap } from '../gamut/cylmap.js'
 import { useGamutStore } from '../stores/gamutStore.js'
 
@@ -144,16 +167,29 @@ const primG = ref([0.300, 0.600])
 const primB = ref([0.150, 0.060])
 const white = ref([0.3127, 0.3290])
 const clowlo  = ref(1.0)
-const boostFn = ref('min')
 
 // Preview state
-const previewLoading = ref(false)
-const showSpinner    = ref(false)
-const synthError     = ref(null)
-const previewGamut   = ref(null)
-const previewVolume  = ref(null)
-const previewEntry   = ref(null)
-const previewKey     = ref(0)
+const previewLoading  = ref(false)
+const showSpinner     = ref(false)
+const synthError      = ref(null)
+const previewGamut    = ref(null)
+const previewVolume   = ref(null)
+const previewEntry    = ref(null)
+const previewKey      = ref(0)
+const previewTab        = ref('rings')
+const previewSurface    = ref(null)
+const surfaceLoading    = ref(false)
+const surfaceCameraElev  = ref(12)
+const surfaceCameraAzim  = ref(9)
+const surfaceCameraDistance = ref(331)
+const surfaceVersion     = ref(0)
+
+const previewSurfaceGamuts = computed(() => {
+  if (!previewEntry.value || !previewSurface.value) return []
+  return [{ id: previewEntry.value.id, colour: '#888', surface: previewSurface.value,
+            visible: true, alpha: 0.85, wireframe: false, chroma: 1.0, lightness: null,
+            edgeColour: '#444', _sv: surfaceVersion.value }]
+})
 
 let previewId     = null
 let debounceTimer = null
@@ -226,8 +262,31 @@ function setCoord(key, idx, val) {
   else set(white, false)
 }
 
+// ── Tab switching ──────────────────────────────────────────────────────────
+async function switchTab(tab) {
+  previewTab.value = tab
+  if (tab === 'surface' && previewEntry.value && !previewSurface.value && !surfaceLoading.value) {
+    await loadSurface()
+  }
+}
+
+async function loadSurface() {
+  if (!previewEntry.value) return
+  surfaceLoading.value = true
+  try { previewSurface.value = await getSurface(previewEntry.value.id); surfaceVersion.value++ }
+  catch { /* surface load failed; canvas stays empty */ }
+  finally { surfaceLoading.value = false }
+}
+
+// When the preview entry changes: on null (error/reset) clear surface immediately;
+// on a new entry keep the old surface showing until the new fetch completes.
+watch(previewEntry, async (entry) => {
+  if (!entry) { previewSurface.value = null; return }
+  if (previewTab.value === 'surface') await loadSurface()
+})
+
 // ── Preview lifecycle ──────────────────────────────────────────────────────
-watch([primR, primG, primB, white, clowlo, boostFn], schedulePreview, { deep: true })
+watch([primR, primG, primB, white, clowlo], schedulePreview, { deep: true })
 watch(visible, v => { if (v) schedulePreview() })
 
 function schedulePreview() {
@@ -237,7 +296,6 @@ function schedulePreview() {
 }
 
 async function doPreview() {
-  previewEntry.value = null
   previewLoading.value = true
   synthError.value = null
 
@@ -251,7 +309,6 @@ async function doPreview() {
     gamma: 2.2,
     name: synthName.value.trim() || 'Custom',
     clowlo: clowlo.value,
-    boost_fn: boostFn.value,
   }
 
   try {
@@ -294,6 +351,11 @@ function onHide() {
   previewGamut.value = null
   previewEntry.value = null
   previewVolume.value = null
+  previewSurface.value = null
+  previewTab.value = 'rings'
+  surfaceCameraElev.value  = 12
+  surfaceCameraAzim.value  = 9
+  surfaceCameraDistance.value = 331
 }
 
 onUnmounted(() => {
@@ -427,6 +489,17 @@ onUnmounted(() => {
 
 .add-modal__coord:focus { border-color: var(--p-primary-400); }
 
+.add-modal__clowlo-slider {
+  flex: 1;
+  min-width: 0;
+  accent-color: var(--p-primary-400);
+  cursor: pointer;
+}
+
+.add-modal__clowlo-num {
+  width: 56px;
+}
+
 .add-modal__preview-hdr {
   display: flex;
   align-items: center;
@@ -434,12 +507,36 @@ onUnmounted(() => {
   flex-shrink: 0;
 }
 
-.add-modal__preview-title {
+.add-modal__tabs {
+  display: flex;
+  background: var(--p-surface-100);
+  border-radius: 4px;
+  padding: 2px;
+  gap: 1px;
+}
+
+.add-modal__tab {
   font-size: 0.7rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  padding: 2px 10px;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
   color: var(--p-text-muted-color);
+  cursor: pointer;
+}
+
+.add-modal__tab--active {
+  background: var(--p-surface-0);
+  color: var(--p-text-color);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+}
+
+.add-modal__surface-fill {
+  position: absolute;
+  inset: 0;
 }
 
 .add-modal__vol {
