@@ -1,10 +1,15 @@
 <template>
   <header class="app-header">
     <span class="app-header__title">CIELab Gamut Tools</span>
-    <Button label="Export" icon="pi pi-download" size="small" outlined
-            :disabled="!canExport"
-            @click="ep.toggle($event)" />
+    <div class="app-header__actions">
+      <Button label="Export" icon="pi pi-download" size="small" outlined
+              :disabled="!canExport"
+              @click="ep.toggle($event)" />
+      <Button icon="pi pi-info-circle" size="small" text rounded aria-label="About"
+              @click="showAbout = true" />
+    </div>
     <ExportPanel ref="ep" />
+    <AboutDialog v-model="showAbout" />
   </header>
 </template>
 
@@ -12,12 +17,14 @@
 import { ref, computed } from 'vue'
 import Button from 'primevue/button'
 import ExportPanel from './ExportPanel.vue'
+import AboutDialog from './AboutDialog.vue'
 import { useUiStore } from '../stores/uiStore.js'
 import { useSelectionStore } from '../stores/selectionStore.js'
 
 const ui = useUiStore()
 const selection = useSelectionStore()
 const ep = ref(null)
+const showAbout = ref(false)
 
 const canExport = computed(() => {
   if (ui.activeView === 'rings') return !!selection.dutId
@@ -41,5 +48,11 @@ const canExport = computed(() => {
 .app-header__title {
   font-weight: 600;
   font-size: 1rem;
+}
+
+.app-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
 }
 </style>

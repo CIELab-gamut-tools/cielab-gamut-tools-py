@@ -149,6 +149,68 @@ app = FastAPI(title="CIELab Gamut Tools", lifespan=lifespan)
 # ---------------------------------------------------------------------------
 
 
+@app.get("/api/about")
+def about() -> dict:  # type: ignore[type-arg]
+    from cielab_gamut_tools import __version__
+
+    return {
+        "version": __version__,
+        "description": "Python implementation of CIELab gamut volume calculation. "
+        "Port of the MATLAB reference implementation on which the following "
+        "IEC TC110 and ICDM standards are based.",
+        "standards": [
+            {
+                "title": "ICDM Information Display Measurements Standard (IDMS) v1.3, §5.32",
+                "subtitle": "Colour Gamut Envelope — Colour Capability",
+            },
+            {
+                "title": "IEC 62977-3-5 — Electronic displays:",
+                "subtitle": "Evaluation of optical performance — Colour capabilities",
+            },
+            {
+                "title": "IEC 62906-6-1 — Displays:",
+                "subtitle": "Colour gamut intersection visualisation method",
+            },
+        ],
+        "citations": [
+            {
+                "topic": "Gamut volume calculation",
+                "authors": "E. Smith, R. L. Heckaman, K. Lang, J. Penczek, J. Bergquist",
+                "year": 2020,
+                "title": "Measuring the color capability of modern display systems.",
+                "journal": "Journal of the Society for Information Display",
+                "ref": "28(6), 548–556",
+                "doi": "https://doi.org/10.1002/jsid.918",
+            },
+            {
+                "topic": "Gamut rings concept",
+                "authors": "K. Masaoka, F. Jiang, M. D. Fairchild, R. L. Heckaman",
+                "year": 2020,
+                "title": "Analysis of color volume of multi-chromatic displays using gamut rings.",
+                "journal": "Journal of the Society for Information Display",
+                "ref": "28(3), 273–286",
+                "doi": "https://doi.org/10.1002/jsid.852",
+            },
+            {
+                "topic": "Gamut ring intersection",
+                "authors": "K. Masaoka, E. Smith, K. Lang, B. Berkeley, J. Bergquist, J. Penczek",
+                "year": 2025,
+                "title": "Visualization of reproducible object colors in standard color spaces "
+                "using the gamut ring intersection.",
+                "journal": "Journal of the Society for Information Display",
+                "ref": "33(4), 231–245",
+                "doi": "https://doi.org/10.1002/jsid.2031",
+            },
+        ],
+        "algorithm": "Cylindrical integration in CIELab space via Möller-Trumbore "
+        "ray-triangle intersection. Bradford chromatic adaptation to D50. "
+        "Reference implementation: cielab-gamut-tools-m (MATLAB/Octave).",
+        "repository": "https://github.com/CIELab-gamut-tools/cielab-gamut-tools-py",
+        "documentation": "https://cielab-gamut-tools.readthedocs.io",
+        "licence": "MIT",
+    }
+
+
 @app.get("/api/gamuts")
 def list_gamuts() -> list[dict]:  # type: ignore[type-arg]
     return [_entry_dict(e) for e in _registry.values()]
