@@ -94,17 +94,18 @@
           <span v-if="previewVolume !== null" class="add-modal__vol">
             {{ Math.round(previewVolume).toLocaleString() }} ΔE³
           </span>
-          <i v-if="previewLoading" class="pi pi-spin pi-spinner add-modal__spinner" />
         </div>
 
         <div class="add-modal__preview-canvas">
           <RingsCanvas v-if="previewGamut" :key="previewKey"
                        :gamut="previewGamut"
                        @volume="v => previewVolume = v" />
-          <div v-else class="add-modal__preview-empty">
+          <div v-if="!previewGamut" class="add-modal__preview-empty">
             <span v-if="synthError" class="add-modal__preview-err">{{ synthError }}</span>
-            <span v-else-if="previewLoading"><i class="pi pi-spin pi-spinner" /> Computing…</span>
             <span v-else>Adjust parameters to see a live preview</span>
+          </div>
+          <div v-if="showSpinner" class="add-modal__preview-overlay">
+            <i class="pi pi-spin pi-spinner add-modal__spinner-lg" />
           </div>
         </div>
       </div>
@@ -126,7 +127,7 @@ import Dialog from 'primevue/dialog'
 import Button from 'primevue/button'
 import ChromaticityDiagram from './ChromaticityDiagram.vue'
 import RingsCanvas from './RingsCanvas.vue'
-import { createSynthetic, deleteGamut, renameGamut, getCylmap } from '../api.js'
+import { createSynthetic, updateSynthetic, deleteGamut, renameGamut } from '../api.js'
 import { unpackCylmap } from '../gamut/cylmap.js'
 import { useGamutStore } from '../stores/gamutStore.js'
 
@@ -146,6 +147,7 @@ const boostFn = ref('min')
 
 // Preview state
 const previewLoading = ref(false)
+const showSpinner    = ref(false)
 const synthError     = ref(null)
 const previewGamut   = ref(null)
 const previewVolume  = ref(null)
@@ -154,6 +156,7 @@ const previewKey     = ref(0)
 
 let previewId     = null
 let debounceTimer = null
+let spinnerTimer  = null
 
 // ── Presets ────────────────────────────────────────────────────────────────
 const PRIM_PRESETS = {
@@ -229,38 +232,42 @@ watch(visible, v => { if (v) schedulePreview() })
 function schedulePreview() {
   if (!visible.value) return
   clearTimeout(debounceTimer)
-  debounceTimer = setTimeout(doPreview, 400)
+  debounceTimer = setTimeout(doPreview, 200)  // ← debounce delay
 }
 
 async function doPreview() {
-  if (previewId) {
-    const id = previewId; previewId = null
-    deleteGamut(id).catch(() => {})
-  }
-  previewGamut.value = null
   previewEntry.value = null
-  previewVolume.value = null
   previewLoading.value = true
   synthError.value = null
 
+  // Show spinner only if response takes longer than threshold — avoids flicker on fast calls
+  clearTimeout(spinnerTimer)
+  spinnerTimer = setTimeout(() => { showSpinner.value = true }, 500)  // ← spinner threshold
+
+  const payload = {
+    primaries_xy: [primR.value, primG.value, primB.value],
+    white_xy: white.value,
+    gamma: 2.2,
+    name: synthName.value.trim() || 'Custom',
+    clowlo: clowlo.value,
+    boost_fn: boostFn.value,
+  }
+
   try {
-    const entry = await createSynthetic({
-      primaries_xy: [primR.value, primG.value, primB.value],
-      white_xy: white.value,
-      gamma: 2.2,
-      name: synthName.value.trim() || 'Custom',
-      clowlo: clowlo.value,
-      boost_fn: boostFn.value,
-    })
-    previewId = entry.id
-    previewEntry.value = entry
-    const packed = await getCylmap(entry.id)
-    previewGamut.value = unpackCylmap(packed)
+    const result = previewId
+      ? await updateSynthetic(previewId, payload)
+      : await createSynthetic(payload)
+    if (!previewId) previewId = result.entry.id
+    previewEntry.value = result.entry
+    previewGamut.value = unpackCylmap(result.packed)
     previewKey.value++
   } catch (e) {
     synthError.value = e.message
+    previewGamut.value = null
   } finally {
     previewLoading.value = false
+    clearTimeout(spinnerTimer)
+    showSpinner.value = false
   }
 }
 
@@ -279,6 +286,8 @@ async function addSynthetic() {
 // ── Cleanup ────────────────────────────────────────────────────────────────
 function onHide() {
   clearTimeout(debounceTimer)
+  clearTimeout(spinnerTimer)
+  showSpinner.value = false
   synthError.value = null
   if (previewId) { deleteGamut(previewId).catch(() => {}); previewId = null }
   previewGamut.value = null
@@ -288,6 +297,7 @@ function onHide() {
 
 onUnmounted(() => {
   clearTimeout(debounceTimer)
+  clearTimeout(spinnerTimer)
   if (previewId) deleteGamut(previewId).catch(() => {})
 })
 </script>
@@ -461,4 +471,19 @@ onUnmounted(() => {
 }
 
 .add-modal__preview-err { color: var(--p-red-500); }
+
+.add-modal__preview-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.12);
+  border-radius: 6px;
+}
+
+.add-modal__spinner-lg {
+  font-size: 1.6rem;
+  color: var(--p-primary-400);
+}
 </style>

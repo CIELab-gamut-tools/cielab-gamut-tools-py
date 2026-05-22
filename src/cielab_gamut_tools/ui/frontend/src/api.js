@@ -29,8 +29,38 @@ export async function uploadGamut(file) {
   return res.json()
 }
 
+/**
+ * Decode the combined binary response from POST/PATCH synthetic endpoints.
+ * Wire format: uint32 json_len + UTF-8 JSON + padding + packed cylmap binary.
+ */
+function decodeSynthResponse(buf) {
+  const view = new DataView(buf)
+  const jsonLen = view.getUint32(0, true)
+  const entry = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 4, jsonLen)))
+
+  const cylmapOffset = Math.ceil((4 + jsonLen) / 4) * 4
+  const lSteps = view.getUint32(cylmapOffset, true)
+  const hSteps = view.getUint32(cylmapOffset + 4, true)
+  const nCells = lSteps * hSteps
+  const counts = new Uint8Array(buf, cylmapOffset + 8, nCells)
+  const chromaByteStart = Math.ceil((cylmapOffset + 8 + nCells) / 4) * 4
+  const chroma = new Float32Array(buf, chromaByteStart)
+
+  const offsets = new Uint32Array(nCells)
+  let acc = 0
+  for (let i = 0; i < nCells; i++) { offsets[i] = acc; acc += counts[i] }
+
+  return { entry, packed: { lSteps, hSteps, counts, chroma, offsets } }
+}
+
 export async function createSynthetic(payload) {
-  return (await req('POST', '/gamuts/synthetic', payload)).json()
+  const res = await req('POST', '/gamuts/synthetic', payload)
+  return decodeSynthResponse(await res.arrayBuffer())
+}
+
+export async function updateSynthetic(id, payload) {
+  const res = await req('PATCH', `/gamuts/${id}/synthetic`, payload)
+  return decodeSynthResponse(await res.arrayBuffer())
 }
 
 export async function deleteGamut(id) {

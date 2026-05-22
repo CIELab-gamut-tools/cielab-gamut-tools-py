@@ -9,6 +9,7 @@ on the Gamut object).
 from __future__ import annotations
 
 import io
+import json
 import os
 import struct
 import tempfile
@@ -103,6 +104,28 @@ def _entry_dict(entry: GamutEntry) -> dict:  # type: ignore[type-arg]
     }
 
 
+def _pack_cylmap_bytes(gamut: Gamut) -> bytes:
+    get_cylindrical_map(gamut)
+    counts = gamut._cylmap_counts
+    chroma = gamut._cylmap_chroma
+    assert counts is not None and chroma is not None
+    l_steps, h_steps = counts.shape
+    header = struct.pack("<II", l_steps, h_steps)
+    counts_bytes = counts.flatten("C").tobytes()
+    n = len(header) + len(counts_bytes)
+    padding = (4 - n % 4) % 4
+    return header + counts_bytes + b"\x00" * padding + chroma.tobytes()
+
+
+def _synth_response(entry: GamutEntry, status_code: int = 200) -> Response:
+    """Binary: uint32 json_len + UTF-8 JSON + padding + packed cylmap."""
+    json_bytes = json.dumps(_entry_dict(entry)).encode("utf-8")
+    n = 4 + len(json_bytes)
+    padding = (4 - n % 4) % 4
+    body = struct.pack("<I", len(json_bytes)) + json_bytes + b"\x00" * padding + _pack_cylmap_bytes(entry.gamut)
+    return Response(content=body, media_type="application/octet-stream", status_code=status_code)
+
+
 # ---------------------------------------------------------------------------
 # App lifecycle
 # ---------------------------------------------------------------------------
@@ -172,7 +195,7 @@ class SyntheticRequest(BaseModel):
 
 
 @app.post("/api/gamuts/synthetic", status_code=201)
-def create_synthetic(req: SyntheticRequest) -> dict:  # type: ignore[type-arg]
+async def create_synthetic(req: SyntheticRequest) -> Response:
     try:
         sg = SyntheticGamut(
             np.array(req.primaries_xy),
@@ -186,7 +209,26 @@ def create_synthetic(req: SyntheticRequest) -> dict:  # type: ignore[type-arg]
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     entry = _add_entry(req.name or "Custom gamut", "synthetic", gamut)
-    return _entry_dict(entry)
+    return _synth_response(entry, status_code=201)
+
+
+@app.patch("/api/gamuts/{gamut_id}/synthetic")
+async def update_synthetic(gamut_id: str, req: SyntheticRequest) -> Response:
+    entry = _registry.get(gamut_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Gamut not found")
+    try:
+        sg = SyntheticGamut(
+            np.array(req.primaries_xy),
+            np.array(req.white_xy),
+            gamma=req.gamma,
+            clowlo=req.clowlo,
+            boost_fn=req.boost_fn,
+        )
+        entry.gamut = sg.gamut
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return _synth_response(entry)
 
 
 # ---------------------------------------------------------------------------
@@ -213,7 +255,7 @@ def rename_gamut(gamut_id: str, req: RenameRequest) -> dict:  # type: ignore[typ
 
 
 @app.delete("/api/gamuts/{gamut_id}", status_code=204)
-def delete_gamut(gamut_id: str) -> None:
+async def delete_gamut(gamut_id: str) -> None:
     entry = _registry.get(gamut_id)
     if entry is None:
         raise HTTPException(status_code=404, detail="Gamut not found")
@@ -236,25 +278,11 @@ def delete_gamut(gamut_id: str) -> None:
 
 
 @app.get("/api/gamuts/{gamut_id}/cylmap")
-def get_cylmap(gamut_id: str) -> Response:
+async def get_cylmap(gamut_id: str) -> Response:
     entry = _registry.get(gamut_id)
     if entry is None:
         raise HTTPException(status_code=404, detail="Gamut not found")
-
-    get_cylindrical_map(entry.gamut)  # builds and caches if needed
-
-    counts = entry.gamut._cylmap_counts  # uint8 (l_steps, h_steps)
-    chroma = entry.gamut._cylmap_chroma  # float32 flat
-    assert counts is not None and chroma is not None
-
-    l_steps, h_steps = counts.shape
-    header = struct.pack("<II", l_steps, h_steps)
-    counts_bytes = counts.flatten("C").tobytes()
-    n = len(header) + len(counts_bytes)
-    padding = (4 - n % 4) % 4
-
-    body = header + counts_bytes + b"\x00" * padding + chroma.tobytes()
-    return Response(content=body, media_type="application/octet-stream")
+    return Response(content=_pack_cylmap_bytes(entry.gamut), media_type="application/octet-stream")
 
 
 # ---------------------------------------------------------------------------
