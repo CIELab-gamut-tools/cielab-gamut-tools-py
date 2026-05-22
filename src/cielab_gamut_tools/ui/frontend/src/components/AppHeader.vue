@@ -23,6 +23,7 @@ import ExportPanel from './ExportPanel.vue'
 import AboutDialog from './AboutDialog.vue'
 import { useUiStore } from '../stores/uiStore.js'
 import { useSelectionStore } from '../stores/selectionStore.js'
+import { closeKeepalive } from '../api.js'
 
 const ui = useUiStore()
 const selection = useSelectionStore()
@@ -37,8 +38,10 @@ const canExport = computed(() => {
 
 function handleClose() {
   ui.clientClosing = true
-  // Give the overlay a moment to render before the tab potentially closes.
-  setTimeout(() => window.close(), 100)
+  // Fire DELETE without awaiting — keepalive:true ensures it's sent even on unload.
+  // A 200 ms delay before window.close() gives the request time to leave the browser.
+  closeKeepalive().catch(() => {})
+  setTimeout(() => window.close(), 500)
 }
 </script>
 

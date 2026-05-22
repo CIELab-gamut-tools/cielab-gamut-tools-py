@@ -2,7 +2,7 @@ import { onMounted, onUnmounted, watch } from 'vue'
 import { keepalive } from '../api.js'
 import { useUiStore } from '../stores/uiStore.js'
 
-const POLL_MS = 5000
+const POLL_MS = 2000
 
 export function useServerHealth() {
   const ui = useUiStore()

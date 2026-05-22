@@ -22,6 +22,11 @@ export async function keepalive() {
   return (await req('GET', '/keepalive')).json()
 }
 
+export async function closeKeepalive() {
+  // Use fetch directly with keepalive:true so the request survives tab close.
+  await fetch('/api/keepalive', { method: 'DELETE', keepalive: true })
+}
+
 export async function listGamuts() {
   return (await req('GET', '/gamuts')).json()
 }

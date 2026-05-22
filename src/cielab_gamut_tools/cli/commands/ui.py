@@ -13,7 +13,7 @@ def ui_command(
         False, "--no-browser", help="Do not open browser automatically."
     ),
     timeout: int = typer.Option(
-        30,
+        10,
         "--timeout",
         help=(
             "Seconds of browser inactivity before the server shuts down automatically. "

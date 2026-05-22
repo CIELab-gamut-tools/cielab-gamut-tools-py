@@ -43,22 +43,46 @@ from cielab_gamut_tools.synthetic import SyntheticGamut
 # Timeout (seconds) before shutting down when no keepalive is received.
 # 0 = disabled.  Set via CGT_UI_TIMEOUT env var (written by ui.py before
 # calling uvicorn.run so it is readable at module import time).
-_TIMEOUT: float = float(os.environ.get("CGT_UI_TIMEOUT", "30"))
+_TIMEOUT: float = float(os.environ.get("CGT_UI_TIMEOUT", "10"))
 _STARTUP_GRACE: float = 60.0   # seconds before watchdog becomes active
 
 _last_seen: float = 0.0
 _startup_time: float = 0.0
+_first_keepalive: bool = False   # True once the browser has sent its first ping
+_warned: bool = False
+_last_seen_at_warn: float = 0.0
+_warn_time: float = 0.0          # monotonic time when warning was issued
 
 
 async def _watchdog() -> None:
+    global _warned, _last_seen_at_warn, _warn_time
     while True:
-        await asyncio.sleep(5)
+        await asyncio.sleep(1)
         if _TIMEOUT <= 0:
             continue
         now = time.monotonic()
-        if now - _startup_time < _STARTUP_GRACE:
+        # Startup grace: wait until the browser has connected at least once,
+        # or until _STARTUP_GRACE seconds have elapsed (handles never-connected case).
+        if not _first_keepalive and now - _startup_time < _STARTUP_GRACE:
             continue
-        if now - _last_seen > _TIMEOUT:
+        # Reset warning if the browser has sent a keepalive since we warned.
+        if _warned and _last_seen > _last_seen_at_warn:
+            _warned = False
+            _warn_time = 0.0
+        elapsed = now - _last_seen
+        warn_at = _TIMEOUT / 2
+        if elapsed > warn_at and not _warned:
+            print(
+                f"\nUI activity not detected, closing in {round(warn_at)}s",
+                flush=True,
+            )
+            _warned = True
+            _last_seen_at_warn = _last_seen
+            _warn_time = now
+        # Only shut down after the full warning window has elapsed since the warning
+        # was issued — never in the same tick, even if elapsed >> _TIMEOUT.
+        if _warned and now - _warn_time >= warn_at:
+            print("Closing due to inactivity.", flush=True)
             os.kill(os.getpid(), signal.SIGTERM)
             break
 
@@ -163,9 +187,10 @@ def _synth_response(entry: GamutEntry, status_code: int = 200) -> Response:
 
 @asynccontextmanager  # type: ignore[arg-type]
 async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
-    global _startup_time, _last_seen, _palette_counter
+    global _startup_time, _last_seen, _first_keepalive, _palette_counter
     _startup_time = time.monotonic()
     _last_seen = time.monotonic()
+    _first_keepalive = False
     _registry.clear()
     _palette_counter = 0
     for name, factory in _STANDARDS:
@@ -247,9 +272,21 @@ def about() -> dict:  # type: ignore[type-arg]
 
 @app.get("/api/keepalive")
 def keepalive() -> dict[str, bool]:
-    global _last_seen
+    global _last_seen, _first_keepalive
     _last_seen = time.monotonic()
+    _first_keepalive = True
     return {"ok": True}
+
+
+@app.delete("/api/keepalive", status_code=204)
+async def close_keepalive() -> None:
+    """Browser is intentionally closing; shut down after the response is sent."""
+    async def _deferred_shutdown() -> None:
+        await asyncio.sleep(0.15)
+        print("Closing at browser request.", flush=True)
+        os.kill(os.getpid(), signal.SIGTERM)
+
+    asyncio.create_task(_deferred_shutdown())
 
 
 @app.get("/api/gamuts")
