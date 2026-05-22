@@ -231,6 +231,21 @@ Call `import matplotlib.pyplot as plt; plt.show()` after plotting, or use `--out
 
 ---
 
+## Interactive UI
+
+`cgt ui` launches a local web application for interactive gamut exploration.
+
+```bash
+cgt ui              # opens browser at http://localhost:8000
+cgt ui --port 8080  # custom port
+cgt ui --no-browser # server only
+```
+
+Features: drag-and-drop CGATS file loading, rings diagram and 3D surface views,
+pairwise coverage matrix, PNG/PDF export.
+
+---
+
 ## Development
 
 ```bash
@@ -238,6 +253,18 @@ git clone https://github.com/CIELab-gamut-tools/cielab-gamut-tools-py.git
 cd cielab-gamut-tools-py
 pip install -e ".[dev]"
 pytest
+```
+
+To work on the UI frontend (requires Node.js):
+
+```bash
+# Build the frontend once (output goes to ui/dist/, served by cgt ui)
+make ui
+
+# Run frontend dev server with hot-reload (proxies /api to the Python server)
+cd src/cielab_gamut_tools/ui/frontend
+npm install
+npm run dev   # Vite on :5173, Python API on :8000
 ```
 
 ## Citations

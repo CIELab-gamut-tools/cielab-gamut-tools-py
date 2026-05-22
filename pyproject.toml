@@ -74,6 +74,9 @@ path = "src/cielab_gamut_tools/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/cielab_gamut_tools"]
+artifacts = [
+    "src/cielab_gamut_tools/ui/dist/**",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

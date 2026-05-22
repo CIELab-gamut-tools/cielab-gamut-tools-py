@@ -27,9 +27,19 @@ pytest --cov=cielab_gamut_tools                    # with coverage
 ruff check src tests
 ruff format src tests
 mypy src
+
+# UI frontend (requires Node.js)
+make ui                                            # build frontend → ui/dist/
+cd src/cielab_gamut_tools/ui/frontend
+npm run dev                                        # dev server: Vite :5173 + Python API :8000
 ```
 
 The test suite runs in ~700 ms (Numba JIT warms up at import).
+
+`npm run dev` starts both servers via `concurrently` (Vite on port 5173 proxying `/api` to the
+Python server on port 8000). Use this for UI development; changes to `.vue`/`.js` files hot-reload
+instantly. `make ui` runs `npm run build` which compiles to `ui/dist/` — this is the static bundle
+served by `cgt ui` and bundled into the Python wheel.
 
 ## Architecture
 
