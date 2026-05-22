@@ -23,6 +23,7 @@ export const useUiStore = defineStore('ui', {
     exportOptions: {
       format: 'png',
       dpi: 150,
+      surfaceSource: 'python',  // 'python' | 'canvas'
     },
     ringsOptions: {
       // Axis
@@ -65,6 +66,7 @@ export const useUiStore = defineStore('ui', {
       perspectiveBlend: 1,     // 0 = isometric, 1 = perspective
       cameraElev: 12,          // degrees above horizontal plane (−90…90)
       cameraAzim: 9,           // degrees around L* axis, from +a* (−180…180)
+      cameraDistance: 331,     // distance from camera to orbit target
       colourSpace: 'srgb',     // 'srgb' | 'display-p3' — hook for wide-gamut rendering
     },
   }),
@@ -93,9 +95,10 @@ export const useUiStore = defineStore('ui', {
     setSurfacePerspective(blend) {
       this.surfaceOptions.perspectiveBlend = Math.max(0, Math.min(1, blend))
     },
-    setCameraAngle(elev, azim) {
+    setCameraAngle(elev, azim, dist = null) {
       this.surfaceOptions.cameraElev = Math.round(Math.max(-90, Math.min(90, elev)))
       this.surfaceOptions.cameraAzim = Math.round(azim)
+      if (dist !== null) this.surfaceOptions.cameraDistance = Math.round(dist)
     },
 
     // Analysis selection — independent of render selection

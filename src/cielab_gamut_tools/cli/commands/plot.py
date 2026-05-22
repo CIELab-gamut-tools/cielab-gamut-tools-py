@@ -687,6 +687,15 @@ def surface(
     if elev is not None or azim is not None:
         ax.view_init(elev=elev, azim=azim)
 
+    eff_xlim = parsed_xlim or (-128.0, 128.0)
+    eff_ylim = parsed_ylim or (-128.0, 128.0)
+    eff_zlim = parsed_zlim or (0.0, 100.0)
+    ax.set_box_aspect([
+        eff_xlim[1] - eff_xlim[0],
+        eff_ylim[1] - eff_ylim[0],
+        eff_zlim[1] - eff_zlim[0],
+    ])
+
     if show_legend:
         handles = getattr(ax, "_gamut_legend_handles", [])
         if handles:

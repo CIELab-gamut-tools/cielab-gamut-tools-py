@@ -11,8 +11,9 @@
       :perspectiveBlend="ui.surfaceOptions.perspectiveBlend"
       :cameraElev="ui.surfaceOptions.cameraElev"
       :cameraAzim="ui.surfaceOptions.cameraAzim"
+      :cameraDistance="ui.surfaceOptions.cameraDistance"
       :colourSpace="ui.surfaceOptions.colourSpace"
-      @camera-change="ui.setCameraAngle($event.elev, $event.azim)"
+      @camera-change="ui.setCameraAngle($event.elev, $event.azim, $event.dist)"
       class="surface-view__canvas" />
   </div>
 </template>

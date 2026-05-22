@@ -3,21 +3,34 @@
     <div class="ep">
       <div class="ep__title">Export {{ viewLabel }}</div>
 
-      <div class="ep__row">
-        <label class="ep__label">Format</label>
-        <select class="ep__select" :value="ui.exportOptions.format"
-                @change="ui.setExportOption('format', $event.target.value)">
-          <option value="png">PNG</option>
-          <option value="pdf">PDF</option>
+      <!-- Source picker — surface view only -->
+      <div v-if="ui.activeView === 'surface'" class="ep__row">
+        <label class="ep__label">Source</label>
+        <select class="ep__select" :value="ui.exportOptions.surfaceSource"
+                @change="ui.setExportOption('surfaceSource', $event.target.value)">
+          <option value="python">Plot</option>
+          <option value="canvas">Screenshot</option>
         </select>
       </div>
 
-      <div class="ep__row">
-        <label class="ep__label">DPI</label>
-        <input class="ep__num" type="number" min="72" max="600" step="1"
-               :value="ui.exportOptions.dpi"
-               @change="ui.setExportOption('dpi', +$event.target.value)" />
-      </div>
+      <!-- Format + DPI — not relevant for canvas capture -->
+      <template v-if="showFormatDpi">
+        <div class="ep__row">
+          <label class="ep__label">Format</label>
+          <select class="ep__select" :value="ui.exportOptions.format"
+                  @change="ui.setExportOption('format', $event.target.value)">
+            <option value="png">PNG</option>
+            <option value="pdf">PDF</option>
+          </select>
+        </div>
+
+        <div class="ep__row">
+          <label class="ep__label">DPI</label>
+          <input class="ep__num" type="number" min="72" max="600" step="1"
+                 :value="ui.exportOptions.dpi"
+                 @change="ui.setExportOption('dpi', +$event.target.value)" />
+        </div>
+      </template>
 
       <button class="ep__btn" :disabled="busy" @click="doExport">
         <i v-if="busy" class="pi pi-spin pi-spinner" style="margin-right:4px" />
@@ -35,17 +48,23 @@ import Popover from 'primevue/popover'
 import { useUiStore } from '../stores/uiStore.js'
 import { useSelectionStore } from '../stores/selectionStore.js'
 import { useGamutStore } from '../stores/gamutStore.js'
+import { useCanvasCapture } from '../composables/useCanvasCapture.js'
 import { downloadRings, downloadSurface } from '../api.js'
 
 const ui = useUiStore()
 const selection = useSelectionStore()
 const gamuts = useGamutStore()
+const { captureCanvas } = useCanvasCapture()
 
 const pop = ref(null)
 const busy = ref(false)
 const error = ref(null)
 
 const viewLabel = computed(() => ui.activeView === 'rings' ? 'rings' : 'surface')
+
+const showFormatDpi = computed(() =>
+  ui.activeView !== 'surface' || ui.exportOptions.surfaceSource !== 'canvas'
+)
 
 function toggle(event) {
   error.value = null
@@ -118,12 +137,27 @@ function buildSurfaceOptions() {
   }
 }
 
+function triggerBlobDownload(blob, filename) {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
 async function doExport() {
   busy.value = true
   error.value = null
   try {
     if (ui.activeView === 'rings') {
       await downloadRings(buildRingsOptions())
+    } else if (ui.exportOptions.surfaceSource === 'canvas') {
+      if (!captureCanvas.value) throw new Error('Canvas not available')
+      const blob = await captureCanvas.value()
+      triggerBlobDownload(blob, 'surface.png')
     } else {
       await downloadSurface(buildSurfaceOptions())
     }

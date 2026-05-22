@@ -7,6 +7,9 @@ import { ref, watch, onMounted, onUnmounted } from 'vue'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { labVerticesToColors } from '../gamut/labToRgb.js'
+import { useCanvasCapture } from '../composables/useCanvasCapture.js'
+
+const capture = useCanvasCapture()
 
 const props = defineProps({
   // Array of { id, colour, surface, visible, alpha, wireframe, chroma, lightness, edgeColour }
@@ -570,7 +573,7 @@ onMounted(() => {
   orthoCamera = new THREE.OrthographicCamera(0, 0, 0, 0, -5000, 5000)
   camera = perspCamera
 
-  renderer = new THREE.WebGLRenderer({ antialias: true })
+  renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true })
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
   renderer.setSize(w, h)
   el.appendChild(renderer.domElement)
@@ -646,6 +649,13 @@ onMounted(() => {
   updateTicks()
 
   syncMeshes(props.gamuts)
+
+  capture.register(() => {
+    renderer.render(scene, camera)
+    return new Promise(resolve => {
+      renderer.domElement.toBlob(b => resolve(b), 'image/png')
+    })
+  })
 })
 
 watch(
@@ -694,6 +704,7 @@ watch(
 )
 
 onUnmounted(() => {
+  capture.unregister()
   cancelAnimationFrame(animId)
   ro?.disconnect()
   controls?.dispose()

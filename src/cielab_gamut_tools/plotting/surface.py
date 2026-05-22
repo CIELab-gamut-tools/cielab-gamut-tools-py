@@ -168,6 +168,7 @@ def plot_surface(
     ax.set_xlim(*xlim)
     ax.set_ylim(*ylim)
     ax.set_zlim(*zlim)
+    ax.set_box_aspect([xlim[1] - xlim[0], ylim[1] - ylim[0], zlim[1] - zlim[0]])
 
     if title is not None:
         ax.set_title(title)
