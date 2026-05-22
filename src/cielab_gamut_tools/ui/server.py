@@ -8,11 +8,14 @@ on the Gamut object).
 
 from __future__ import annotations
 
+import asyncio
 import io
 import json
 import os
+import signal
 import struct
 import tempfile
+import time
 import uuid
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -32,6 +35,33 @@ from cielab_gamut_tools.gamut import Gamut
 # Importing this module triggers Numba JIT warm-up at server start.
 from cielab_gamut_tools.geometry.volume import get_cylindrical_map
 from cielab_gamut_tools.synthetic import SyntheticGamut
+
+# ---------------------------------------------------------------------------
+# Heartbeat / watchdog
+# ---------------------------------------------------------------------------
+
+# Timeout (seconds) before shutting down when no keepalive is received.
+# 0 = disabled.  Set via CGT_UI_TIMEOUT env var (written by ui.py before
+# calling uvicorn.run so it is readable at module import time).
+_TIMEOUT: float = float(os.environ.get("CGT_UI_TIMEOUT", "30"))
+_STARTUP_GRACE: float = 60.0   # seconds before watchdog becomes active
+
+_last_seen: float = 0.0
+_startup_time: float = 0.0
+
+
+async def _watchdog() -> None:
+    while True:
+        await asyncio.sleep(5)
+        if _TIMEOUT <= 0:
+            continue
+        now = time.monotonic()
+        if now - _startup_time < _STARTUP_GRACE:
+            continue
+        if now - _last_seen > _TIMEOUT:
+            os.kill(os.getpid(), signal.SIGTERM)
+            break
+
 
 # ---------------------------------------------------------------------------
 # Registry
@@ -133,13 +163,17 @@ def _synth_response(entry: GamutEntry, status_code: int = 200) -> Response:
 
 @asynccontextmanager  # type: ignore[arg-type]
 async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
+    global _startup_time, _last_seen, _palette_counter
+    _startup_time = time.monotonic()
+    _last_seen = time.monotonic()
     _registry.clear()
-    global _palette_counter
     _palette_counter = 0
     for name, factory in _STANDARDS:
         sg = factory()  # type: ignore[call-arg]
         _add_entry(name, "synthetic", sg.gamut, protected=True)
+    task = asyncio.create_task(_watchdog())
     yield
+    task.cancel()
 
 
 app = FastAPI(title="CIELab Gamut Tools", lifespan=lifespan)
@@ -209,6 +243,13 @@ def about() -> dict:  # type: ignore[type-arg]
         "documentation": "https://cielab-gamut-tools.readthedocs.io",
         "licence": "MIT",
     }
+
+
+@app.get("/api/keepalive")
+def keepalive() -> dict[str, bool]:
+    global _last_seen
+    _last_seen = time.monotonic()
+    return {"ok": True}
 
 
 @app.get("/api/gamuts")

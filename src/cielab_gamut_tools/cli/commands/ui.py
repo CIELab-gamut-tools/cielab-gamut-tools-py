@@ -1,3 +1,4 @@
+import os
 import webbrowser
 from pathlib import Path
 
@@ -10,6 +11,14 @@ def ui_command(
     port: int = typer.Option(8000, "--port", "-p", help="Port to listen on."),
     no_browser: bool = typer.Option(
         False, "--no-browser", help="Do not open browser automatically."
+    ),
+    timeout: int = typer.Option(
+        30,
+        "--timeout",
+        help=(
+            "Seconds of browser inactivity before the server shuts down automatically. "
+            "0 disables the timeout (server runs until Ctrl-C)."
+        ),
     ),
 ) -> None:
     """Start the interactive web UI."""
@@ -25,6 +34,8 @@ def ui_command(
             err=True,
         )
         raise typer.Exit(1)
+
+    os.environ["CGT_UI_TIMEOUT"] = str(timeout)
 
     url = f"http://localhost:{port}"
     typer.echo(f"CIELab gamut tools UI → {url}  (Ctrl-C to stop)")

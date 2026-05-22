@@ -19,6 +19,8 @@ function patchPg(state, id, patch) {
 
 export const useUiStore = defineStore('ui', {
   state: () => ({
+    serverAlive: true,
+    clientClosing: false,
     activeView: 'rings',
     exportOptions: {
       format: 'png',

@@ -7,6 +7,9 @@
               @click="ep.toggle($event)" />
       <Button icon="pi pi-info-circle" size="small" text rounded aria-label="About"
               @click="showAbout = true" />
+      <Button icon="pi pi-power-off" size="small" text rounded aria-label="Close"
+              severity="danger"
+              @click="handleClose" />
     </div>
     <ExportPanel ref="ep" />
     <AboutDialog v-model="showAbout" />
@@ -31,6 +34,12 @@ const canExport = computed(() => {
   if (ui.activeView === 'surface') return !!selection.dutId || selection.referenceIds.length > 0
   return false
 })
+
+function handleClose() {
+  ui.clientClosing = true
+  // Give the overlay a moment to render before the tab potentially closes.
+  setTimeout(() => window.close(), 100)
+}
 </script>
 
 <style scoped>

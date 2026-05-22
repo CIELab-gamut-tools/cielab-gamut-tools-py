@@ -18,6 +18,10 @@ export async function getAbout() {
   return (await req('GET', '/about')).json()
 }
 
+export async function keepalive() {
+  return (await req('GET', '/keepalive')).json()
+}
+
 export async function listGamuts() {
   return (await req('GET', '/gamuts')).json()
 }
