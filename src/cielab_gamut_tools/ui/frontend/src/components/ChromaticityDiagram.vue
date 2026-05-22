@@ -38,7 +38,7 @@
       <circle v-for="key in ['r','g','b']" :key="key"
               :cx="get(key)[0]" :cy="get(key)[1]"
               :r="dragging === key ? 0.020 : 0.015"
-              :fill="HANDLE_FILL[key]"
+              :fill="chromColor(get(key))"
               stroke="white"
               :stroke-width="dragging === key ? 0.007 : 0.005"
               class="handle"
@@ -48,7 +48,7 @@
       <rect :x="get('w')[0] - 0.011" :y="get('w')[1] - 0.011"
             width="0.022" height="0.022"
             :transform="`rotate(45,${get('w')[0]},${get('w')[1]})`"
-            :fill="dragging === 'w' ? '#fff' : '#eee'"
+            :fill="chromColor(get('w'))"
             :stroke="dragging === 'w' ? '#333' : '#666'"
             :stroke-width="dragging === 'w' ? 0.007 : 0.005"
             class="handle"
@@ -78,7 +78,21 @@ const props = defineProps({
 })
 const emit = defineEmits(['update:r', 'update:g', 'update:b', 'update:w'])
 
-const HANDLE_FILL = { r: '#dd2222', g: '#22aa22', b: '#2244ee' }
+function chromColor(xy) {
+  const [x, y] = xy
+  if (y <= 0) return '#808080'
+  const z = 1 - x - y
+  const X = x / y, Y = 1, Z = z / y
+  let r =  3.2404 * X - 1.5371 * Y - 0.4985 * Z
+  let g = -0.9692 * X + 1.8760 * Y + 0.0415 * Z
+  let b =  0.0557 * X - 0.2040 * Y + 1.0572 * Z
+  const mx = Math.max(r, g, b)
+  if (mx <= 0) return '#808080'
+  r = r < 0 ? 0 : Math.round(Math.pow(r / mx, 0.4) * 255)
+  g = g < 0 ? 0 : Math.round(Math.pow(g / mx, 0.4) * 255)
+  b = b < 0 ? 0 : Math.round(Math.pow(b / mx, 0.4) * 255)
+  return `rgb(${r},${g},${b})`
+}
 
 const svgEl  = ref(null)
 const dragging = ref(null)

@@ -1,4 +1,5 @@
 <template>
+  <div class="rings-outer">
   <div class="rings-wrap">
     <svg :viewBox="`-${LIM} -${LIM} ${LIM*2} ${LIM*2}`" class="rings-svg">
       <!-- border -->
@@ -35,6 +36,7 @@
       <text :x="150-LIM" :y="140" class="lbl-sub">RSS</text>
     </svg>
     <canvas ref="canvasEl" class="rings-canvas" />
+  </div>
   </div>
 </template>
 
@@ -247,10 +249,20 @@ function renderWithRef({ cssA, cssB }, { cssA: rx, cssB: ry }) {
 </script>
 
 <style scoped>
+.rings-outer {
+  width: 100%;
+  aspect-ratio: 1;
+  max-height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .rings-wrap {
   position: relative;
-  width: 100%;
   height: 100%;
+  aspect-ratio: 1;
+  max-width: 100%;
 }
 
 .rings-svg,

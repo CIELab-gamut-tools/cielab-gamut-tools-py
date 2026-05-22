@@ -2,7 +2,8 @@
   <Dialog v-model:visible="visible"
           header="Synthetic Gamut"
           modal
-          :style="{ width: '920px' }"
+          :style="{ width: '920px', maxHeight: '90vh' }"
+          :contentStyle="{ overflow: 'hidden' }"
           @hide="onHide">
 
     <div class="add-modal__synth-body">
@@ -306,7 +307,7 @@ onUnmounted(() => {
 .add-modal__synth-body {
   display: flex;
   gap: 1rem;
-  height: min(calc(90vh - 140px), 600px);
+  height: min(calc(90vh - 160px), 600px);
   align-items: stretch;
 }
 
@@ -457,6 +458,9 @@ onUnmounted(() => {
   background: var(--p-surface-0);
   overflow: hidden;
   position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .add-modal__preview-empty {
