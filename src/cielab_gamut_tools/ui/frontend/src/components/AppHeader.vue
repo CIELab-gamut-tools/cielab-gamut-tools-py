@@ -1,12 +1,29 @@
 <template>
   <header class="app-header">
     <span class="app-header__title">CIELab Gamut Tools</span>
-    <Button label="Export" icon="pi pi-download" size="small" outlined disabled />
+    <Button label="Export" icon="pi pi-download" size="small" outlined
+            :disabled="!canExport"
+            @click="ep.toggle($event)" />
+    <ExportPanel ref="ep" />
   </header>
 </template>
 
 <script setup>
+import { ref, computed } from 'vue'
 import Button from 'primevue/button'
+import ExportPanel from './ExportPanel.vue'
+import { useUiStore } from '../stores/uiStore.js'
+import { useSelectionStore } from '../stores/selectionStore.js'
+
+const ui = useUiStore()
+const selection = useSelectionStore()
+const ep = ref(null)
+
+const canExport = computed(() => {
+  if (ui.activeView === 'rings') return !!selection.dutId
+  if (ui.activeView === 'surface') return !!selection.dutId || selection.referenceIds.length > 0
+  return false
+})
 </script>
 
 <style scoped>

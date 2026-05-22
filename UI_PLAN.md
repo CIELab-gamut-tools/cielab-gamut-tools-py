@@ -223,16 +223,21 @@ and full test coverage in `tests/test_ui_server.py`. All tests pass.
 
 ---
 
-## Stage 7 — Downloadable export
+## Stage 7 — Downloadable export ✓ COMPLETE
 
-- Rings export reuses `POST /api/render/rings` — adding `"format": "pdf"` and a higher `"dpi"`
-  triggers `Content-Disposition: attachment`; no separate endpoint needed. Output is identical
-  to `cgt plot rings`.
-- Surface export: `POST /api/export/surface` — calls matplotlib 3D render path, returns PNG or
-  PDF bytes. Output is identical to `cgt plot surface`.
-- `ExportPanel`: format picker (PNG/PDF), DPI spinner; for rings, options are already set in
-  `RingsPropertiesPanel` — export button in `AppHeader` just re-posts with download flag.
-- Downloaded via blob URL.
+- Rings export reuses `POST /api/render/rings` with `download: true`, `format` and `dpi` from
+  `exportOptions`; all other options come from current `ringsOptions`. No new endpoint needed.
+- Surface export: `POST /api/export/surface` — accepts per-gamut options (alpha, wireframe,
+  chroma, lightness, edge_colour, label), camera angle (elev, azim), format, dpi, show_legend.
+  Calls `plot_surface` on shared matplotlib 3D axes. Returns PNG or PDF with
+  `Content-Disposition: attachment`.
+- `ExportPanel.vue`: PrimeVue Popover triggered from AppHeader; format picker (PNG/PDF),
+  DPI spinner, Download button with loading state and error display.
+- `AppHeader.vue`: Export button enabled when a DUT is selected (rings) or any gamut is
+  selected (surface); disabled on Analysis tab. Toggles `ExportPanel` popover.
+- `api.js`: `downloadRings(options)` and `downloadSurface(options)` call the server and
+  trigger a browser download via blob URL + `<a download>`.
+- `exportOptions` (`{ format, dpi }`) persisted in `uiStore` localStorage.
 
 ---
 

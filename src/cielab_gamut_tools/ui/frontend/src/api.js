@@ -92,6 +92,27 @@ export async function renderRings(options) {
   return res.blob()
 }
 
+function triggerDownload(blob, filename) {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
+export async function downloadRings(options) {
+  const res = await req('POST', '/render/rings', options)
+  triggerDownload(await res.blob(), `rings.${options.format || 'png'}`)
+}
+
+export async function downloadSurface(options) {
+  const res = await req('POST', '/export/surface', options)
+  triggerDownload(await res.blob(), `surface.${options.format || 'png'}`)
+}
+
 /**
  * Fetch and decode the binary cylmap for a gamut.
  *

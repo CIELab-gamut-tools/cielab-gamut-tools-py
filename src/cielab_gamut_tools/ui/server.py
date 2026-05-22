@@ -561,6 +561,98 @@ def render_rings(req: RingsRenderRequest) -> Response:
 
 
 # ---------------------------------------------------------------------------
+# Export surface  →  PNG or PDF bytes (matplotlib 3D render)
+# ---------------------------------------------------------------------------
+
+
+class SurfaceExportGamut(BaseModel):
+    id: str
+    alpha: float = 0.75
+    wireframe: bool = False
+    chroma: float | None = None
+    lightness: float | None = None
+    edge_colour: str | None = None
+    label: str | None = None
+
+
+class SurfaceExportRequest(BaseModel):
+    gamuts: list[SurfaceExportGamut]
+    format: str = "png"
+    dpi: int = 150
+    figsize: str = "10,8"
+    elev: float | None = None
+    azim: float | None = None
+    title: str | None = None
+    show_legend: bool = True
+
+
+@app.post("/api/export/surface")
+def export_surface(req: SurfaceExportRequest) -> Response:
+    if not req.gamuts:
+        raise HTTPException(status_code=422, detail="No gamuts specified")
+
+    from cielab_gamut_tools.plotting.surface import plot_surface
+    import matplotlib.pyplot as plt
+
+    fmt = req.format.lower() if req.format.lower() in ("png", "pdf") else "png"
+    figsize_parts = _parse_floats(req.figsize)
+    figsize = (figsize_parts[0], figsize_parts[1]) if len(figsize_parts) == 2 else (10.0, 8.0)
+
+    fig = None
+    content = b""
+    try:
+        fig = plt.figure(figsize=figsize)
+        ax = fig.add_subplot(111, projection="3d")
+
+        for g_req in req.gamuts:
+            entry = _registry.get(g_req.id)
+            if entry is None:
+                raise HTTPException(status_code=404, detail=f"Gamut {g_req.id!r} not found")
+
+            kwargs: dict = dict(alpha=g_req.alpha, wireframe=g_req.wireframe)
+            if g_req.wireframe:
+                if g_req.edge_colour is not None:
+                    kwargs["color"] = g_req.edge_colour
+                else:
+                    if g_req.chroma is not None:
+                        kwargs["chroma"] = g_req.chroma
+                    if g_req.lightness is not None:
+                        kwargs["lightness"] = g_req.lightness
+            if g_req.label is not None:
+                kwargs["label"] = g_req.label
+
+            plot_surface(entry.gamut, ax=ax, **kwargs)
+
+        if req.title:
+            ax.set_title(req.title)
+        if req.elev is not None or req.azim is not None:
+            ax.view_init(elev=req.elev, azim=req.azim)
+        if req.show_legend:
+            handles = getattr(ax, "_gamut_legend_handles", [])
+            if handles:
+                ax.legend(handles=handles)
+
+        buf = io.BytesIO()
+        fig.savefig(buf, format=fmt, dpi=req.dpi, bbox_inches="tight")
+        buf.seek(0)
+        content = buf.read()
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    finally:
+        if fig is not None:
+            plt.close(fig)
+
+    mime = "application/pdf" if fmt == "pdf" else "image/png"
+    return Response(
+        content=content,
+        media_type=mime,
+        headers={"Content-Disposition": f'attachment; filename="surface.{fmt}"'},
+    )
+
+
+# ---------------------------------------------------------------------------
 # Static files / SPA fallback
 # ---------------------------------------------------------------------------
 

@@ -141,8 +141,7 @@ def plot_surface(
 
         poly.set_facecolor([(0.0, 0.0, 0.0, 0.0)] * len(verts))
         poly.set_edgecolor(edge_colors)
-        if linewidth is not None:
-            poly.set_linewidth(linewidth)
+        poly.set_linewidth(linewidth if linewidth is not None else 0.5)
     else:
         poly.set_facecolor(face_rgbs)
         poly.set_edgecolor("none")
