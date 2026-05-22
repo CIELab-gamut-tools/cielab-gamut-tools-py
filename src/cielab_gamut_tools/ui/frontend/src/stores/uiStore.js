@@ -130,7 +130,12 @@ export const useUiStore = defineStore('ui', {
 
   // analysisOptions is intentionally excluded — gamut IDs change on every server
   // restart so persisting them is meaningless; fresh state is always correct.
+  // Camera state (elev/azim/distance/perspectiveBlend) is intentionally excluded —
+  // restoring an orthographic camera distance into a perspective session renders as a dot.
   persist: {
-    pick: ['activeView', 'exportOptions', 'ringsOptions', 'ringsRenderCounter', 'surfaceOptions'],
+    pick: [
+      'activeView', 'exportOptions', 'ringsOptions', 'ringsRenderCounter',
+      'surfaceOptions.perGamut', 'surfaceOptions.colourSpace',
+    ],
   },
 })

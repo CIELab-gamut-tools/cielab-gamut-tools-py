@@ -1,18 +1,18 @@
 <template>
-  <div class="gi" :class="{ 'gi--dut': isDut, 'gi--ref': isRef }">
+  <div class="gi" :class="{ 'gi--dut': isDut, 'gi--ref': isRef }" @click="toggleDut">
     <span class="gi__swatch" :style="{ background: gamut.colour }" />
 
     <span v-if="!editing" class="gi__label" :title="gamut.label" @dblclick="startEdit">
       {{ gamut.label }}
     </span>
     <input v-else ref="editEl" class="gi__edit" v-model="draft"
-           @blur="commit" @keydown.enter="commit" @keydown.escape.stop="cancel" />
+           @click.stop @blur="commit" @keydown.enter="commit" @keydown.escape.stop="cancel" />
 
     <span class="gi__vol">{{ volText }}</span>
 
-    <button class="gi__btn" :class="{ 'gi__btn--on': isDut }" title="Set as DUT" @click="toggleDut">D</button>
-    <button class="gi__btn" :class="{ 'gi__btn--on': isRef }" title="Toggle reference" @click="selection.toggleReference(gamut.id)">R</button>
-    <button v-if="!gamut.protected" class="gi__btn gi__btn--del" title="Remove" @click="remove">
+    <button class="gi__btn" :class="{ 'gi__btn--on': isDut }" title="Set as DUT" @click.stop="toggleDut">D</button>
+    <button class="gi__btn" :class="{ 'gi__btn--on': isRef }" title="Toggle reference" @click.stop="selection.toggleReference(gamut.id)">R</button>
+    <button v-if="!gamut.protected" class="gi__btn gi__btn--del" title="Remove" @click.stop="remove">
       <i class="pi pi-times" />
     </button>
     <span v-else class="gi__btn-placeholder" />
@@ -76,6 +76,7 @@ async function remove() {
   padding: 5px 8px;
   border-bottom: 1px solid var(--p-surface-100);
   min-width: 0;
+  cursor: pointer;
 }
 
 .gi:hover {

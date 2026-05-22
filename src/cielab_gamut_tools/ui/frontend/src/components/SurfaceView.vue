@@ -1,7 +1,7 @@
 <template>
   <div class="surface-view">
     <div v-if="!hasSelection" class="surface-view__status">
-      Select a DUT or reference gamut to view its surface
+      Select a gamut as a DUT [D] or reference [R] to view its surface
     </div>
     <div v-else-if="isLoading" class="surface-view__status">
       <i class="pi pi-spin pi-spinner" /> Loading surface…
