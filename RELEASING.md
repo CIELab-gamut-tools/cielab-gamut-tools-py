@@ -43,7 +43,20 @@ git tag v0.1.1
 git push && git push --tags
 ```
 
-### 3. Build and publish
+### 3. Build the frontend
+
+The wheel includes the compiled frontend from `src/cielab_gamut_tools/ui/dist/`.
+Rebuild it before packaging so the release has the latest UI:
+
+```cmd
+cd src\cielab_gamut_tools\ui\frontend
+npm run build
+cd ..\..\..\..
+```
+
+(On WSL / Git Bash: `make ui` from the project root.)
+
+### 4. Build and publish
 
 ```cmd
 rmdir /s /q dist
