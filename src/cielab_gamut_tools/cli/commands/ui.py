@@ -1,10 +1,29 @@
 import os
+import subprocess
 import webbrowser
 from pathlib import Path
 
 import typer
 
 _DIST = Path(__file__).parents[2] / "ui" / "dist"
+
+
+def _open_browser(url: str) -> None:
+    """Open URL in browser, using Windows browser when running under WSL."""
+    if os.environ.get("WSL_DISTRO_NAME") or _is_wsl_kernel():
+        try:
+            subprocess.Popen(["cmd.exe", "/c", "start", url])
+            return
+        except FileNotFoundError:
+            pass  # cmd.exe not found — fall through to webbrowser
+    webbrowser.open(url)
+
+
+def _is_wsl_kernel() -> bool:
+    try:
+        return "microsoft" in Path("/proc/sys/kernel/osrelease").read_text().lower()
+    except Exception:
+        return False
 
 
 def ui_command(
@@ -40,7 +59,7 @@ def ui_command(
     url = f"http://localhost:{port}"
     typer.echo(f"CIELab gamut tools UI → {url}  (Ctrl-C to stop)")
     if not no_browser:
-        webbrowser.open(url)
+        _open_browser(url)
     uvicorn.run(
         "cielab_gamut_tools.ui.server:app",
         host="localhost",

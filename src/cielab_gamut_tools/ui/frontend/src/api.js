@@ -106,7 +106,10 @@ export async function renderRings(options) {
 }
 
 function triggerDownload(blob, filename) {
-  const url = URL.createObjectURL(blob)
+  // Wrap as octet-stream to prevent Firefox's PDF viewer from intercepting
+  // application/pdf blobs and opening them inline instead of downloading.
+  const safe = new Blob([blob], { type: 'application/octet-stream' })
+  const url = URL.createObjectURL(safe)
   const a = document.createElement('a')
   a.href = url
   a.download = filename
