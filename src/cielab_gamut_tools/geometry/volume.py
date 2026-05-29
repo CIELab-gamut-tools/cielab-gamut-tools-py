@@ -470,6 +470,10 @@ def _build_cylindrical_map(
                 "for any real gamut surface."
             )
 
+        slice_counts, chroma_slice, n_written = _repair_parity_violations_slice(
+            slice_counts, chroma_slice, n_written, p
+        )
+
         counts[p] = slice_counts.astype(np.uint8)
 
         if n_written > 0:
@@ -508,6 +512,100 @@ def _check_cylmap_parity(counts: NDArray[np.integer]) -> None:
                 "inaccurate at this slice (MATLAB silently ignores this condition).",
                 stacklevel=4,
             )
+
+
+def _find_insertion_point(
+    smaller: NDArray[np.floating],
+    larger: NDArray[np.floating],
+) -> int:
+    """Find m: position in `larger` (n+2 values, outside-in) where the two new
+    crossings are inserted relative to `smaller` (n values, outside-in).
+
+    Tries all n+1 candidate positions and returns the m that minimises the sum
+    of squared differences between `smaller` and the n continuing entries of
+    `larger` (i.e. `larger` with positions m and m+1 removed).
+    """
+    n = len(smaller)
+    best_m, best_cost = 0, np.inf
+    for m in range(n + 1):
+        c_cont = np.concatenate([larger[:m], larger[m + 2:]])
+        cost = float(np.sum((smaller - c_cont) ** 2))
+        if cost < best_cost:
+            best_cost = cost
+            best_m = m
+    return best_m
+
+
+def _repair_parity_violations_slice(
+    slice_counts: NDArray[np.int64],
+    chroma_buf: NDArray[np.float32],
+    n_written: int,
+    p: int,
+) -> tuple[NDArray[np.int64], NDArray[np.float32], int]:
+    """Repair isolated parity violations in a single L* slice.
+
+    A violation at hue q is repaired when both immediate neighbours (q±1 with
+    wraparound) have the correct parity and their counts differ by exactly 2.
+    The repair drops crossing index m (from _find_insertion_point) from the
+    violating ray's outside-in chroma list.  Violations that don't meet these
+    conditions are left for _check_cylmap_parity to warn about.
+    """
+    h_steps = len(slice_counts)
+    parities = slice_counts % 2
+
+    if int(parities.max()) == int(parities.min()):
+        return slice_counts, chroma_buf, n_written
+
+    dominant = 0 if int((parities == 0).sum()) >= int((parities == 1).sum()) else 1
+    violation_hues = np.where(parities != dominant)[0]
+
+    # Per-hue start offsets into the flat buffer (based on original counts)
+    hue_offsets = np.zeros(h_steps + 1, dtype=np.int64)
+    for i in range(h_steps):
+        hue_offsets[i + 1] = hue_offsets[i] + slice_counts[i]
+
+    repaired = slice_counts.copy()
+    keep = np.ones(n_written, dtype=bool)
+    any_repaired = False
+
+    for q_elem in violation_hues:
+        q = int(q_elem)
+        left_q = (q - 1) % h_steps
+        right_q = (q + 1) % h_steps
+
+        # Only repair isolated violations (immediate neighbours must be correct)
+        if int(parities[left_q]) != dominant or int(parities[right_q]) != dominant:
+            continue
+
+        n_left = int(slice_counts[left_q])
+        n_right = int(slice_counts[right_q])
+
+        if abs(n_left - n_right) != 2:
+            continue
+
+        smaller_q = left_q if n_left <= n_right else right_q
+        larger_q = right_q if n_left <= n_right else left_q
+        n_small = min(n_left, n_right)
+
+        A = chroma_buf[hue_offsets[smaller_q]:hue_offsets[smaller_q] + n_small]
+        C = chroma_buf[hue_offsets[larger_q]:hue_offsets[larger_q] + n_small + 2]
+
+        m = _find_insertion_point(A, C)
+
+        drop_idx = int(hue_offsets[q]) + m
+        if drop_idx >= int(hue_offsets[q + 1]):
+            continue  # m out of bounds for this ray — skip
+
+        keep[drop_idx] = False
+        repaired[q] -= 1
+        any_repaired = True
+
+    if not any_repaired:
+        return slice_counts, chroma_buf, n_written
+
+    new_chroma = chroma_buf[:n_written][keep[:n_written]].copy()
+    new_n_written = int(keep[:n_written].sum())
+    return repaired, new_chroma, new_n_written
 
 
 # ---------------------------------------------------------------------------

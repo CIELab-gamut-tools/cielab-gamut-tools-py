@@ -434,6 +434,29 @@ class TestReflectiveGamut:
         assert gamut.volume() == pytest.approx(1776, rel=0.05)
 
     @pytest.mark.skipif(
+        not (SAMPLES_DIR / "example_reflective_cge_measurement.txt").exists(),
+        reason="Example reflective CGE measurement file not available",
+    )
+    def test_cge_measurement_no_parity_warning(self):
+        """Parity violation at a grazing triangle edge must be repaired silently.
+
+        The example reflective CGE measurement triggers a single-ray parity
+        violation (count=1 between 0-count and 2-count neighbours at L*≈74.5).
+        After repair the warning must NOT fire; before repair it does.
+        """
+        import warnings
+
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "error", message="Parity violation", category=UserWarning
+            )
+            gamut = Gamut.from_cgats(
+                SAMPLES_DIR / "example_reflective_cge_measurement.txt"
+            )
+            vol = gamut.volume()
+        assert vol > 0
+
+    @pytest.mark.skipif(
         not (SAMPLES_DIR / "Sample 4.txt").exists(),
         reason="Sample 4 test file not available",
     )
