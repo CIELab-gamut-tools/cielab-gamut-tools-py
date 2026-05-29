@@ -34,6 +34,7 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
 
       - name: Trigger Scoop manifest update
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.SCOOP_BUCKET_PAT }}
         run: |
