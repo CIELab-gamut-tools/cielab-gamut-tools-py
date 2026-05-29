@@ -7,6 +7,7 @@ paid once for the entire module, not per test.
 
 from __future__ import annotations
 
+import json
 import struct
 from pathlib import Path
 
@@ -68,7 +69,9 @@ def test_create_synthetic(client: TestClient) -> None:
     }
     resp = client.post("/api/gamuts/synthetic", json=payload)
     assert resp.status_code == 201
-    data = resp.json()
+    # Response is binary: uint32 json_len + UTF-8 JSON + padding + cylmap bytes
+    json_len = struct.unpack_from("<I", resp.content, 0)[0]
+    data = json.loads(resp.content[4 : 4 + json_len])
     assert data["name"] == "Test gamut"
     assert data["source"] == "synthetic"
     assert data["protected"] is False

@@ -50,9 +50,10 @@ def about_command() -> None:
 
     console.print(f"\n[bold]cielab-gamut-tools {__version__}[/bold]\n")
     console.print(
-        "Python implementation of CIELab gamut volume calculation.\n"
-        "Port of the MATLAB reference implementation on which the following\n"
-        "IEC TC110 and ICDM standards are based.\n"
+        "Python implementation of CIELab gamut volume calculation for\n"
+        "display colour characterisation. Port of the MATLAB reference\n"
+        "implementation on which the following IEC TC110 and ICDM\n"
+        "standards are based.\n"
     )
 
     console.print("[bold]Standards Compliance:[/bold]")
