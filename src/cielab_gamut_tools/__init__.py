@@ -29,5 +29,5 @@ from cielab_gamut_tools.gamut import Gamut
 from cielab_gamut_tools.measurement import make_rgb_signals
 from cielab_gamut_tools.synthetic import SyntheticGamut
 
-__version__ = "0.5.2"
+__version__ = "0.5.3"
 __all__ = ["Gamut", "SyntheticGamut", "make_rgb_signals"]
