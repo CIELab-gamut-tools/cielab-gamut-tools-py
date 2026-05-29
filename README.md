@@ -27,16 +27,21 @@ Invoke-RestMethod -Uri https://get.scoop.sh | Invoke-Expression
 
 No administrator rights are needed. If you already have Scoop, skip this step.
 
-**3 — Install cielab-gamut-tools**
+**3 — Install pipx**
 
 ```powershell
-scoop bucket add cielab-gamut-tools https://github.com/CIELab-gamut-tools/scoop-bucket
-scoop install cielab-gamut-tools
+scoop install pipx
 ```
 
-Scoop will install Python and pipx automatically if they are not already present.
+Scoop will install Python automatically if not already present.
 
-**4 — Verify**
+**4 — Install cielab-gamut-tools**
+
+```powershell
+pipx install cielab-gamut-tools
+```
+
+**5 — Verify**
 
 ```powershell
 cgt about
@@ -104,12 +109,8 @@ After running `pipx ensurepath`, reopen the terminal before running `cgt about` 
 
 ### Updating
 
-```powershell
-scoop update cielab-gamut-tools        # Windows
-```
-
 ```bash
-pipx upgrade cielab-gamut-tools        # macOS / Linux
+pipx upgrade cielab-gamut-tools
 ```
 
 `cgt about` will tell you if a newer version is available.
