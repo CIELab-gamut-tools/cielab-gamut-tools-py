@@ -6,48 +6,125 @@ Implements the gamut volume algorithm from the [gamut-volume-m](https://github.c
 
 ## Installation
 
-Requires Python 3.10 or later.
+Pick the section for your operating system. Each path installs Python automatically if you don't already have it.
 
-```bash
-pip install cielab-gamut-tools
+---
+
+### Windows
+
+**1 — Open PowerShell**
+
+Press **Win+R**, type `powershell`, press **Enter**.
+
+**2 — Install Scoop**
+
+Scoop is a command-line package manager for Windows. Paste these two lines one at a time:
+
+```powershell
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+Invoke-RestMethod -Uri https://get.scoop.sh | Invoke-Expression
 ```
 
-On Ubuntu 24.04+ / Debian 12+ you may need a virtual environment or pipx due to PEP 668:
+No administrator rights are needed. If you already have Scoop, skip this step.
+
+**3 — Install cielab-gamut-tools**
+
+```powershell
+scoop bucket add cielab-gamut-tools https://github.com/CIELab-gamut-tools/scoop-bucket
+scoop install cielab-gamut-tools
+```
+
+Scoop will install Python and pipx automatically if they are not already present.
+
+**4 — Verify**
+
+```powershell
+cgt about
+```
+
+If you see the version and standards information, installation is complete.
+If `cgt` is not found, close PowerShell and reopen it, then try again.
+
+---
+
+### macOS
+
+**1 — Open Terminal**
+
+Press **Cmd+Space**, type `Terminal`, press **Enter**.
+
+**2 — Install Homebrew**
+
+Homebrew is a package manager for macOS. Paste this line (or get it from [brew.sh](https://brew.sh)):
 
 ```bash
-# virtual environment
-python3 -m venv gamut_env && source gamut_env/bin/activate
-pip install cielab-gamut-tools
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```
 
-# or pipx (CLI only)
+Follow the on-screen prompts. If you already have Homebrew, skip this step.
+
+**3 — Install pipx**
+
+```bash
+brew install pipx
+pipx ensurepath
+```
+
+Close and reopen Terminal after running `pipx ensurepath`.
+
+**4 — Install cielab-gamut-tools**
+
+```bash
 pipx install cielab-gamut-tools
 ```
 
+**5 — Verify**
+
+```bash
+cgt about
+```
+
+---
+
+### Linux (Ubuntu / Debian)
+
+Ubuntu 23.04+ and Debian 12+ include pipx in their package repositories:
+
+```bash
+sudo apt install pipx
+pipx ensurepath
+pipx install cielab-gamut-tools
+```
+
+On older releases, replace the first line with `sudo apt install python3-pip python3-venv && pip install --user pipx`.
+
+After running `pipx ensurepath`, reopen the terminal before running `cgt about` to verify.
+
+---
+
+### Updating
+
+```powershell
+scoop update cielab-gamut-tools        # Windows
+```
+
+```bash
+pipx upgrade cielab-gamut-tools        # macOS / Linux
+```
+
+`cgt about` will tell you if a newer version is available.
+
+---
+
 <details>
-<summary>Install from source</summary>
+<summary>Install from source (developers)</summary>
 
 ```bash
 git clone https://github.com/CIELab-gamut-tools/cielab-gamut-tools-py.git
 cd cielab-gamut-tools-py
-pip install -e .
+pip install -e ".[dev]"
 ```
 </details>
-
-### Updating
-
-```bash
-pipx upgrade cielab-gamut-tools   # if installed with pipx
-pip install --upgrade cielab-gamut-tools  # if installed with pip
-```
-
-If `--version` still shows the old version after upgrading, force-reinstall:
-
-```bash
-pipx install cielab-gamut-tools --force
-pip install --force-reinstall cielab-gamut-tools
-```
-
-`cielab-tools about` will tell you if a newer version is available.
 
 ---
 
@@ -217,11 +294,8 @@ Test signal generation and CGATS export are also available via the API — see t
 
 ## Troubleshooting
 
-**"error: externally-managed-environment" (Ubuntu 24.04+, Debian 12+)**  
-Use a virtual environment or pipx — see Installation above.
-
 **CLI command not found after installation**  
-The `Scripts` (Windows) or `bin` (macOS/Linux) directory may not be on your PATH. Either add it, or run via `python -m cielab_gamut_tools`.
+Close the terminal and reopen it — PATH changes from pipx and Scoop take effect in new sessions. If still missing, run `pipx ensurepath` (macOS/Linux) or check that Scoop completed without errors (Windows).
 
 **File not found errors**  
 Pass an absolute path to your measurement file. On Windows you can Shift+right-click the file and choose "Copy as path"; on macOS hold Option when right-clicking and choose "Copy … as Pathname".

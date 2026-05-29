@@ -1,0 +1,43 @@
+name: Release to PyPI
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build frontend
+        working-directory: src/cielab_gamut_tools/ui/frontend
+        run: npm ci && npm run build
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Build package
+        run: pip install hatch && hatch build
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+      - name: Trigger Scoop manifest update
+        env:
+          GH_TOKEN: ${{ secrets.SCOOP_BUCKET_PAT }}
+        run: |
+          gh workflow run excavator.yml \
+            --repo CIELab-gamut-tools/scoop-bucket \
+            --ref main \
+            --field version=${GITHUB_REF_NAME#v}

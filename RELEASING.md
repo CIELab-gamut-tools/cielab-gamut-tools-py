@@ -1,82 +1,81 @@
 # Releasing a new version
 
-## One-time setup
-
-```cmd
-.venv\Scripts\activate
-pip install hatch
-```
-
-Create a PyPI API token at [pypi.org](https://pypi.org) → Account Settings → API tokens,
-scoped to the `cielab-gamut-tools` project.
-
-Store it in `%USERPROFILE%\.pypirc` so `hatch publish` never prompts:
-
-```ini
-[distutils]
-index-servers =
-    pypi
-
-[pypi]
-username = __token__
-password = pypi-YOUR-TOKEN-HERE
-```
-
 ## Release process
 
 ### 1. Bump the version
 
-```cmd
+```bash
 hatch version patch    # 0.1.0 → 0.1.1
 hatch version minor    # 0.1.0 → 0.2.0
 hatch version major    # 0.1.0 → 1.0.0
 ```
 
-This updates `src/cielab_gamut_tools/__init__.py` automatically — nothing else to edit.
+Hatch prints the new version number to the terminal and updates
+`src/cielab_gamut_tools/__init__.py`. Nothing else needs editing.
 
-### 2. Commit and tag
+### 2. Commit and push
 
-```cmd
+```bash
 git add src/cielab_gamut_tools/__init__.py
-git commit -m "bump version to 0.1.1"
-git tag v0.1.1
-git push && git push --tags
+git commit -m "bump version"
+git push
 ```
 
-### 3. Build the frontend
+That's it. The rest is automated:
 
-The wheel includes the compiled frontend from `src/cielab_gamut_tools/ui/dist/`.
-Rebuild it before packaging so the release has the latest UI:
+- **auto-tag** workflow detects the version file change, reads the new version,
+  and pushes a `vX.Y.Z` git tag.
+- **release** workflow triggers on that tag, builds the frontend and wheel,
+  and publishes to PyPI via OIDC (no token required locally).
+- **Excavator** (in the `scoop-bucket` repo) runs daily and updates the Scoop
+  manifest when it sees the new PyPI version.
 
-```cmd
-cd src\cielab_gamut_tools\ui\frontend
-npm run build
-cd ..\..\..\..
-```
+Verify the release is live:
 
-(On WSL / Git Bash: `make ui` from the project root.)
-
-### 4. Build and publish
-
-```cmd
-rmdir /s /q dist
-hatch build
-hatch publish
-```
-
-That's it. Verify the new version is live:
-
-```cmd
+```bash
 pip index versions cielab-gamut-tools
 ```
 
 ---
 
+## One-time setup (PyPI Trusted Publisher)
+
+This replaces the old `.pypirc` API token approach. Done once; never needs repeating.
+
+### On PyPI
+
+1. Go to [pypi.org](https://pypi.org) → your account → **Your projects** →
+   `cielab-gamut-tools` → **Settings** → **Publishing**
+2. Under **Add a new publisher**, choose **GitHub Actions** and fill in:
+   - **Owner:** `CIELab-gamut-tools`
+   - **Repository:** `cielab-gamut-tools-py`
+   - **Workflow filename:** `release.yml`
+   - **Environment name:** `release`
+3. Save.
+
+### On GitHub
+
+1. Go to the repository → **Settings** → **Environments** → **New environment**
+2. Name it `release` (must match the workflow exactly)
+3. No additional protection rules are needed for a single-developer project,
+   but you can add them if you want an extra confirmation step before publish.
+
+---
+
 ## Dry run on TestPyPI
 
-```cmd
+Set up a Trusted Publisher on [test.pypi.org](https://test.pypi.org) with the same
+details, but use environment name `release-test` and a separate workflow file
+(copy `release.yml`, change the environment name and add `--repository testpypi`
+to the publish step).
+
+Alternatively, build and publish manually for a one-off test:
+
+```bash
+hatch build
+pip install hatch
 hatch publish --repo test
-pip install --index-url https://test.pypi.org/simple/ cielab-gamut-tools
 ```
 
-You will need a separate account and token on [test.pypi.org](https://test.pypi.org).
+You will need a separate API token on [test.pypi.org](https://test.pypi.org) for
+the manual path.

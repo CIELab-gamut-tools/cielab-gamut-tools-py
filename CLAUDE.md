@@ -189,7 +189,7 @@ counts:  int64    (l_steps, h_steps)
 
 **No hard intersection limit.** `_process_hue_loop_nb` pre-allocates its working buffer to `h_steps × n_tri` (the absolute maximum before parity filtering). `_intersect_all_cells_nb` outputs to a buffer of depth `max_k_a + max_k_b` (a tight upper bound). The only ceiling is the number of triangles spanning a given L* slice.
 
-**Parity invariant (checked after every build):** Within each L* slice all 360 rays originate from the same point (L*, 0, 0), which is either inside or outside the gamut cross-section. All intersection counts in a slice must therefore share the same parity. `_check_cylmap_parity()` raises `RuntimeError` on violation (indicates a tessellation gap or self-intersection).
+**Parity invariant (checked after every build):** Within each L* slice all 360 rays originate from the same point (L*, 0, 0), which is either inside or outside the gamut cross-section. All intersection counts in a slice must therefore share the same parity. `_check_cylmap_parity()` issues a `warnings.warn` on violation (MATLAB silently ignores this condition; the volume result may be slightly inaccurate at the affected slice).
 
 **Parity filter (matching MATLAB exactly):**
 ```python
