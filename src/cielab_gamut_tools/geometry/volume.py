@@ -34,6 +34,7 @@ vectorised NumPy operations unchanged.
 
 from __future__ import annotations
 
+import warnings
 from typing import TYPE_CHECKING
 
 import numba
@@ -500,10 +501,12 @@ def _check_cylmap_parity(counts: NDArray[np.integer]) -> None:
     for p in range(l_steps):
         parities = counts[p] % 2   # 0 or 1 per hue
         if int(parities.max()) != int(parities.min()):
-            raise RuntimeError(
+            warnings.warn(
                 f"Parity violation at L* slice {p}: rays yielded mixed odd/even "
-                "intersection counts.  This indicates a gap or self-intersection "
-                "in the gamut surface tessellation."
+                "intersection counts.  This may indicate a gap or self-intersection "
+                "in the gamut surface tessellation.  Volume result may be slightly "
+                "inaccurate at this slice (MATLAB silently ignores this condition).",
+                stacklevel=4,
             )
 
 
