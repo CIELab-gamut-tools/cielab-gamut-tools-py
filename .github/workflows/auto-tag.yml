@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - src/cielab_gamut_tools/__init__.py
+  workflow_dispatch:
 
 jobs:
   tag:
