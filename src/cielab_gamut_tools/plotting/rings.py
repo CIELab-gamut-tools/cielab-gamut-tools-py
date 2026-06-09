@@ -333,6 +333,7 @@ def plot_rings(
     ax.set_ylim(-display_extent, display_extent)
     ax.set_xlabel("a*$_{RSS}$")
     ax.set_ylabel("b*$_{RSS}$")
+    ax.tick_params(which="both", right=True, top=True)
 
     if title == "auto":
         dut_name = dut_label if dut_label is not None else (getattr(_g, "title", None) or "")
