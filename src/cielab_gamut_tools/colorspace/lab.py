@@ -11,11 +11,11 @@ import numpy as np
 from numpy.typing import NDArray
 
 
-# D50 reference white XYZ, computed from xy chromaticity to match the Bradford
-# adaptation in adaptation.py (which also derives dest_white_XYZ via xy_to_XYZ).
-# Using the same derivation ensures RGB white maps to exactly (100, 0, 0) in Lab.
-_D50_x, _D50_y = 0.34567, 0.35850
-D50_WHITE_XYZ = np.array([_D50_x / _D50_y, 1.0, (1.0 - _D50_x - _D50_y) / _D50_y])
+# D50 reference white XYZ — matches the hardcoded values in the MATLAB reference
+# (CIELabGamut.m: D50=[0.9642957, 1, 0.8251046]).  Do not derive from xy; the
+# xy→XYZ formula gives 0.9642120/0.8251883, an 8e-5 offset that shifts all
+# volumes by ~0.005% vs MATLAB.
+D50_WHITE_XYZ = np.array([0.9642957, 1.0, 0.8251046])
 
 # CIELab conversion constants
 EPSILON = 216 / 24389  # (6/29)^3

@@ -10,7 +10,7 @@ from __future__ import annotations
 import numpy as np
 from numpy.typing import NDArray
 
-from cielab_gamut_tools.colorspace.lab import xy_to_XYZ
+from cielab_gamut_tools.colorspace.lab import xy_to_XYZ, D50_WHITE_XYZ
 
 
 # Bradford transformation matrix (XYZ to LMS cone response)
@@ -46,7 +46,8 @@ def adapt_d65_to_d50(
         as it includes a degree of nonlinearity that better models human
         chromatic adaptation.
     """
-    return chromatic_adaptation(xyz, source_white, D50_XY)
+    source_white_XYZ = xy_to_XYZ(source_white)
+    return chromatic_adaptation_xyz(xyz, source_white_XYZ, D50_WHITE_XYZ)
 
 
 def chromatic_adaptation(
